@@ -1,5 +1,12 @@
 # blender-X-Bone+
 blender版本我不知道，反正基于3.1开发
+部分功能调用cats，请安装对应版本的cats插件
+部分功能使用openpyxl，请对blender的python安装openpyxl库
+```
+import subprocess
+# 使用清华大学TUNA镜像站来安装 openpyxl
+subprocess.call([r'请换成你的blender python路径', '-m', 'pip', 'install', 'openpyxl', '-i', 'https://pypi.tuna.tsinghua.edu.cn/simple'])
+```
 ## 提供姿态模式/编辑模式下的骨骼的相对骨架的变换信息，包含：
 - 位置
 - 欧拉旋转
