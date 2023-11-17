@@ -1,6 +1,8 @@
 # blender-X-Bone+
 blender版本我不知道，反正基于3.1开发
+
 部分功能调用cats，请安装对应版本的cats插件
+
 部分功能使用openpyxl，请对blender的python安装openpyxl库
 ```
 import subprocess
