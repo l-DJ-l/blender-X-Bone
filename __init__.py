@@ -13,31 +13,27 @@ import bpy # type: ignore
 import math
 from mathutils import Euler, Matrix, Vector, Quaternion # type: ignore
 ########################## Divider ##########################
-from .杂项 import 顶点组,骨骼相连项,顶点组所有权重,骨架对应#,demo
-from .骨骼摆正 import 姿态摆正,编辑摆正
+from .杂项 import 骨骼与顶点组,MOD骨架替换#,demo
+from .骨骼双模式 import 姿态模式,编辑模式
 from .骨骼变换 import 骨骼变换
 
 
 # 注册插件
 def register():
-    顶点组.register()
-    顶点组所有权重.register()
-    骨骼相连项.register()
-    骨架对应.register()
+    骨骼与顶点组.register()
+    MOD骨架替换.register()
     #demo.register()
-    姿态摆正.register()
-    编辑摆正.register()
+    姿态模式.register()
+    编辑模式.register()
     骨骼变换.register()
 
 # 注销插件
 def unregister():
-    顶点组.unregister()
-    顶点组所有权重.unregister()
-    骨骼相连项.unregister()
-    骨架对应.unregister()
+    骨骼与顶点组.unregister()
+    MOD骨架替换.unregister()
     #demo.unregister()
-    姿态摆正.unregister()
-    编辑摆正.unregister()
+    姿态模式.unregister()
+    编辑模式.unregister()
     骨骼变换.unregister()
 
 
