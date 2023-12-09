@@ -142,7 +142,7 @@ class O_ImportPosExcel(bpy.types.Operator, ImportHelper):
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 key = str(row[key_column])
                 value = str(row[value_column])
-                if (not key) or (key == "None"):
+                if (key == "None") or (value == "None"):
                     continue
                 O_BonePosMapping.bone_mapping[key] = value
 
@@ -183,7 +183,6 @@ class O_BonePosMapping(bpy.types.Operator):
                 constraint.subtarget = target_bone_name
 
         # 应用约束
-        bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = SourceArmature
         bpy.ops.object.mode_set(mode='POSE')
         bpy.ops.pose.select_all(action='SELECT')
@@ -228,7 +227,7 @@ class O_ImportRenameExcel(bpy.types.Operator, ImportHelper):
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 key = str(row[rename_key_column])
                 value = str(row[rename_value_column])
-                if (not key) or (key == "None"):
+                if (key == "None") or (value == "None"):
                     continue
                 O_BoneRenameMapping.bone_mapping[key] = value
 
@@ -271,6 +270,16 @@ class O_BoneRenameMapping(bpy.types.Operator):
         except:
             self.report({'ERROR'}, "似乎没有选择对象") 
             return {'FINISHED'}
+        
+        # 应用两个骨架姿态
+        bpy.context.view_layer.objects.active = SourceArmature
+        bpy.ops.object.mode_set(mode='POSE')
+        bpy.ops.bone.pose_apply()
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.context.view_layer.objects.active = TargetArmature
+        bpy.ops.object.mode_set(mode='POSE')
+        bpy.ops.bone.pose_apply()
+
         # 姿态模式重命名
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = SourceArmature
@@ -278,7 +287,10 @@ class O_BoneRenameMapping(bpy.types.Operator):
         for source_bone_name, target_bone_name in self.bone_mapping.items():
             #SourceArmature.data.bones.active = SourceArmature.data.bones[source_bone_name]
             #bpy.context.active_bone.name = target_bone_name
-            SourceArmature.data.bones[source_bone_name].name = target_bone_name
+            try:
+                SourceArmature.data.bones[source_bone_name].name = target_bone_name
+            except:
+                print(f"{source_bone_name}不存在")
 
         # 保留骨骼的父级记录
         for bone in self.bone_save:
@@ -298,8 +310,13 @@ class O_BoneRenameMapping(bpy.types.Operator):
         for now_modifier in SourceMesh.modifiers:
             if now_modifier.type == 'ARMATURE':
                 bpy.ops.object.modifier_apply(modifier=now_modifier.name) #应用
-        # 取消父级
-        SourceMesh.parent = None
+        # 取消父级保持变换结果
+        bpy.ops.object.select_all(action='DESELECT')
+        SourceArmature.select_set(True)
+        SourceMesh.select_set(True)
+        bpy.context.view_layer.objects.active = SourceArmature
+        bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+
                
         # 添加骨架修改器
         now_modifier = SourceMesh.modifiers.new(name=TargetArmature.name, type='ARMATURE')
@@ -313,15 +330,25 @@ class O_BoneRenameMapping(bpy.types.Operator):
             bpy.ops.object.select_pattern(pattern=bone)
         bpy.ops.armature.select_all(action='INVERT') # 反选
         bpy.ops.armature.delete()
+        # 添加骨架修改器
+        now_modifier = SourceMesh.modifiers.new(name=TargetArmature.name, type='ARMATURE')
+        now_modifier.object = TargetArmature
 
-        # 骨架合并
+        # 清理原骨架
+        bpy.context.view_layer.objects.active = SourceArmature
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.armature.select_all(action='DESELECT')
+        for bone in self.bone_save:
+            bpy.ops.object.select_pattern(pattern=bone)
+        bpy.ops.armature.select_all(action='INVERT') # 反选
+        bpy.ops.armature.delete()
+       # 骨架合并
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
         SourceArmature.select_set(True) #bpy.ops.object.select_pattern(pattern=SourceArmature.name)
         TargetArmature.select_set(True) #bpy.ops.object.select_pattern(pattern=TargetArmature.name)
         bpy.context.view_layer.objects.active = TargetArmature
         bpy.ops.object.join()
-        
         # 指定父级
         bpy.ops.object.select_all(action='DESELECT')
         SourceMesh.select_set(True)
@@ -380,6 +407,9 @@ class O_BoneRenameMapping(bpy.types.Operator):
         bpy.ops.pose.group_add()
         TargetArmature.pose.bone_groups.active.name = "其余骨骼"
         bpy.ops.pose.group_assign(type=4)
+        
+        
+
 
         return {'FINISHED'}
 

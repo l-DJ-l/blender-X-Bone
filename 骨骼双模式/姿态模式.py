@@ -195,6 +195,8 @@ class O_BonePoseApply(bpy.types.Operator):
         for child in armature.children:
             # 将子级物体设为活动对象
             bpy.context.view_layer.objects.active = child
+            bpy.ops.object.shape_key_add(from_mix=False) # 创建一个形态键，避免下一句bug
+            bpy.ops.object.shape_key_remove(all=True) # 删除所有的形态键
             # 检查子级物体上是否有骨架修改器
             armature_modifier = None
             for modifier in child.modifiers:
