@@ -407,13 +407,72 @@ class O_BoneRenameMapping(bpy.types.Operator):
         bpy.ops.pose.group_add()
         TargetArmature.pose.bone_groups.active.name = "其余骨骼"
         bpy.ops.pose.group_assign(type=4)
-        
-        
-
-
         return {'FINISHED'}
 
+class O_only_ImportRenameExcel(bpy.types.Operator, ImportHelper):
+    bl_idname = "excel.only_import_rename"
+    bl_label = "导入Excel"
+    filename_ext = ".xlsx"
 
+    def execute(self, context):
+        excel_file = self.filepath
+        current_skel_column = context.scene.current_skel_column - 1
+        change_skel_column = context.scene.change_skel_column - 1
+
+        if not excel_file or not os.path.exists(excel_file):
+            self.report({'ERROR'}, "请选择有效的Excel文件")
+            return {'CANCELLED'}
+
+        try:
+            # 打开Excel文件
+            workbook = openpyxl.load_workbook(excel_file)
+            sheet = workbook.active
+
+            # 清空现有的bone_mapping字典
+            O_only_BoneRenameMapping.bone_mapping.clear()
+
+            # 读取Excel文件中的数据，并更新bone_mapping字典
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                key = str(row[current_skel_column])
+                value = str(row[change_skel_column])
+                if (key == "None") or (value == "None"):
+                    continue
+                O_only_BoneRenameMapping.bone_mapping[key] = value
+
+            self.report({'INFO'}, f"Excel文件已导入{excel_file}")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"导入Excel文件时出现错误: {e}")
+            return {'CANCELLED'}
+        
+class O_only_BoneRenameMapping(bpy.types.Operator):
+    bl_idname = "bone.only_rename_mapping"
+    bl_label = "仅重命名"
+    bl_description = "将源骨架骨骼按excel对应, 重命名"
+
+    bone_mapping = {}
+ 
+    def execute(self, context):
+        if not self.bone_mapping:
+            self.report({'ERROR'}, "似乎没有导入excel")
+            return {'FINISHED'}
+        try:
+            TargetArmature = bpy.data.objects.get(context.scene.rename_armature.name)
+        except:
+            self.report({'ERROR'}, "似乎没有选择对象") 
+            return {'FINISHED'}
+
+        # 姿态模式重命名
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.context.view_layer.objects.active = TargetArmature
+        bpy.ops.object.mode_set(mode='POSE')
+        for current_bone_name, change_bone_name in self.bone_mapping.items():
+            try:
+                TargetArmature.data.bones[current_bone_name].name = change_bone_name
+            except:
+                print(f"{current_bone_name}不存在")
+
+        return {'FINISHED'}
 
 class P_BoneMapping(bpy.types.Panel):
     bl_label = "MOD骨架替换"
@@ -486,6 +545,24 @@ class P_BoneMapping(bpy.types.Panel):
         row.operator(O_BoneRenameMapping.bl_idname, icon="PLAY")
 
 
+        box = layout.box()
+        # 批量重命名 选择目标骨架
+        col = box.column(align=True)
+        col.label(text="选择目标骨架:")
+        col.prop(context.scene, "rename_armature", text="", icon="ARMATURE_DATA")
+        # 导入Excel文件按钮和文本框
+        col = box.column(align=True)
+        row = col.row(align=True)
+        row.prop(context.scene, "current_skel_column", text="原名称")
+        row.prop(context.scene, "change_skel_column", text="目标名称")
+        row = col.row(align=True)
+        row.operator(O_only_ImportRenameExcel.bl_idname, icon="IMPORT")
+        # 添加按钮
+        row.operator(O_only_BoneRenameMapping.bl_idname, icon="PLAY")
+
+        
+
+
 
 def register():
     bpy.utils.register_class(O_ImportSimpleExcel)
@@ -494,6 +571,8 @@ def register():
     bpy.utils.register_class(O_BonePosMapping)
     bpy.utils.register_class(O_ImportRenameExcel)
     bpy.utils.register_class(O_BoneRenameMapping)
+    bpy.utils.register_class(O_only_ImportRenameExcel)
+    bpy.utils.register_class(O_only_BoneRenameMapping)
     bpy.utils.register_class(P_BoneMapping)
     ########################## Divider ##########################
     bpy.types.Scene.simple_source_armature = bpy.props.PointerProperty(type=bpy.types.Object, poll=ObjType.is_armature)
@@ -502,6 +581,7 @@ def register():
     bpy.types.Scene.rename_source_mesh = bpy.props.PointerProperty(type=bpy.types.Object, poll=ObjType.is_mesh)
     bpy.types.Scene.rename_source_armature = bpy.props.PointerProperty(type=bpy.types.Object, poll=ObjType.is_armature)
     bpy.types.Scene.rename_target_armature = bpy.props.PointerProperty(type=bpy.types.Object, poll=ObjType.is_armature)
+    bpy.types.Scene.rename_armature = bpy.props.PointerProperty(type=bpy.types.Object, poll=ObjType.is_armature)
     ########################## Divider ##########################
     bpy.types.Scene.simple_main_column = bpy.props.IntProperty(
         name="主骨骼列",
@@ -556,6 +636,17 @@ def register():
         default=6,
         min=1,
     )
+    ########################## Divider ##########################
+    bpy.types.Scene.current_skel_column = bpy.props.IntProperty(
+        name="原名称",
+        default=1,
+        min=1,
+    )
+    bpy.types.Scene.change_skel_column = bpy.props.IntProperty(
+        name="目标名称",
+        default=2,
+        min=1,
+    )    
 
 def unregister():
     bpy.utils.unregister_class(O_ImportSimpleExcel)
@@ -564,6 +655,8 @@ def unregister():
     bpy.utils.unregister_class(O_BonePosMapping)
     bpy.utils.unregister_class(O_ImportRenameExcel)
     bpy.utils.unregister_class(O_BoneRenameMapping)
+    bpy.utils.unregister_class(O_only_ImportRenameExcel)
+    bpy.utils.unregister_class(O_only_BoneRenameMapping)    
     bpy.utils.unregister_class(P_BoneMapping)
 
     del bpy.types.Scene.simple_source_armature
@@ -572,6 +665,7 @@ def unregister():
     del bpy.types.Scene.rename_source_mesh
     del bpy.types.Scene.rename_source_armature
     del bpy.types.Scene.rename_target_armature
+    del bpy.types.Scene.rename_armature
     
 
     del bpy.types.Scene.simple_main_column
@@ -585,5 +679,6 @@ def unregister():
     del bpy.types.Scene.rename_value_column
     del bpy.types.Scene.rename_save_column
     del bpy.types.Scene.rename_target_save_column
-
+    del bpy.types.Scene.current_skel_column
+    del bpy.types.Scene.change_skel_column
 
