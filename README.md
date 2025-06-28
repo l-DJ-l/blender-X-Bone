@@ -2,7 +2,7 @@
 ## 叠甲
 blender版本我不知道，现在基于4.4开发
 
-一些功能还修到4.4
+大部分功能还没修到4.4
 部分功能使用openpyxl，请对blender的python安装openpyxl库，你可以尝试在blender脚本页面运行以下代码，报错请自行解决安装openpyxl库的问题
 ``` python
 import subprocess

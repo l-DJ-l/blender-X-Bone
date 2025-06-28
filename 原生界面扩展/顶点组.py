@@ -7,7 +7,7 @@ class DATA_PT_vertex_group_tools(bpy.types.Panel):
     bl_region_type = 'WINDOW'
     bl_context = "data"
     bl_parent_id = "DATA_PT_vertex_groups"  # 设置为顶点组面板的ID
-    # bl_options = {'HIDE_HEADER'}  # 隐藏标题栏
+    bl_options = {'HIDE_HEADER'}  # 隐藏标题栏
 
     @classmethod
     def poll(cls, context):

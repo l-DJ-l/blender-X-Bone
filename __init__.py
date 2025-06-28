@@ -15,7 +15,7 @@ import math
 from mathutils import Euler, Matrix, Vector, Quaternion 
 ########################## Divider ##########################
 from .骨骼扩展操作 import 骨骼与顶点组, 骨骼姿态操作, 骨骼编辑操作
-from .原生界面扩展 import 骨骼矩阵四元数, 顶点组
+from .原生界面扩展 import 骨骼矩阵四元数, 顶点组, 测试
 from .MOD操作 import MOD骨架替换
 
 
