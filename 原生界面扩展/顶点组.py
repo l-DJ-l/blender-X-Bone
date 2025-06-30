@@ -27,16 +27,17 @@ class DATA_PT_vertex_group_tools(bpy.types.Panel):
             "zero_weight": "N/A"
         })
         
-        row = layout.row()
+        col = layout.column(align=True)
+        row = col.row(align=True)
         row.label(text=f"数量: {stats['total']}")
         row.label(text=f"有权重: {stats['with_weight']}")
         row.label(text=f"无权重: {stats['zero_weight']}")
 
-        row = layout.row(align=True)
+        row = col.row(align=True)
         row.operator(O_VertexGroupsCount.bl_idname, text=O_VertexGroupsCount.bl_label, icon="GROUP_VERTEX")
         row.operator(O_VertexGroupsDelNoneActive.bl_idname, text=O_VertexGroupsDelNoneActive.bl_label, icon="GROUP_VERTEX")
 
-        row = layout.row(align=True)
+        row = col.row(align=True)
         row.operator(O_VertexGroupsMatchRename.bl_idname, text=O_VertexGroupsMatchRename.bl_label, icon="SORTBYEXT")
         row.operator(O_VertexGroupsSortMatch.bl_idname, text=O_VertexGroupsSortMatch.bl_label, icon="SORTSIZE")
 
