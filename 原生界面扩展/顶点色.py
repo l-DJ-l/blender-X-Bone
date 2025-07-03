@@ -67,7 +67,7 @@ class DATA_PT_color_attribute_tools(bpy.types.Panel):
         
 
 class O_AddRenameColorAttributes(bpy.types.Operator):
-    bl_idname = "color_attr.add_rename"
+    bl_idname = "xmod.color_attr_add_rename"
     bl_label = "添加并重命名"
     bl_description = "添加颜色属性并重命名为COLOR, COLOR1, COLOR2...格式"
     
@@ -120,7 +120,7 @@ class O_AddRenameColorAttributes(bpy.types.Operator):
 
 # 调色板操作
 class O_AddColor(bpy.types.Operator):
-    bl_idname = "color_attr.add_color"
+    bl_idname = "xmod.color_attr_add_color"
     bl_label = "添加颜色"
     bl_description = "向调色板添加新颜色"
     
@@ -132,7 +132,7 @@ class O_AddColor(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_RemoveColor(bpy.types.Operator):
-    bl_idname = "color_attr.remove_color"
+    bl_idname = "xmod.color_attr_remove_color"
     bl_label = "删除颜色"
     bl_description = "从调色板中删除颜色"
     
@@ -145,7 +145,7 @@ class O_RemoveColor(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_ApplyColor(bpy.types.Operator):
-    bl_idname = "color_attr.apply_color"
+    bl_idname = "xmod.color_attr_apply_color"
     bl_label = "应用颜色"
     bl_description = "将颜色应用到当前活动的顶点色层"
     

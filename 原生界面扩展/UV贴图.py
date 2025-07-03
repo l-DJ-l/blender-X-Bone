@@ -34,7 +34,7 @@ class DATA_PT_uv_map_tools(bpy.types.Panel):
 
 
 class O_AddRenameUVMaps(bpy.types.Operator):
-    bl_idname = "uv_map.add_rename"
+    bl_idname = "xbone.uv_map_add_rename"
     bl_label = "添加并重命名"
     bl_description = "添加UV贴图并重命名为TEXCOORD.xy格式"
     
@@ -76,7 +76,7 @@ class O_AddRenameUVMaps(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_SetActiveUVMaps(bpy.types.Operator):
-    bl_idname = "uv_map.set_active"
+    bl_idname = "xbone.uv_map_set_active"
     bl_label = "设置活动"
     bl_description = "将所有选中物体的活动UV设置为指定索引"
     
@@ -106,7 +106,7 @@ class O_SetActiveUVMaps(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_SetRenderUVMaps(bpy.types.Operator):
-    bl_idname = "uv_map.set_render"
+    bl_idname = "xbone.uv_map_set_render"
     bl_label = "设置渲染"
     bl_description = "将所有选中物体的渲染UV设置为指定索引"
     
@@ -140,7 +140,7 @@ class O_SetRenderUVMaps(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_RemoveUVMaps(bpy.types.Operator):
-    bl_idname = "uv_map.remove"
+    bl_idname = "xbone.uv_map_remove"
     bl_label = "删除"
     bl_description = "删除指定索引的UV贴图"
     

@@ -5,7 +5,7 @@ from mathutils import Euler, Matrix, Vector, Quaternion # type: ignore
 ########################## Divider ##########################
 
 class O_BoneEditYUp(bpy.types.Operator):
-    bl_idname = "bone.edit_y_up"
+    bl_idname = "xbone.edit_y_up"
     bl_label = "90 0 0"
     bl_description = "选中骨骼Y轴向上右手坐标系, 请先应用骨架旋转"
 
@@ -31,7 +31,7 @@ class O_BoneEditYUp(bpy.types.Operator):
         return {"FINISHED"}
     
 class O_BoneEditZUp(bpy.types.Operator):
-    bl_idname = "bone.edit_z_up"
+    bl_idname = "xbone.edit_z_up"
     bl_label = "0 0 0"
     bl_description = "选中骨骼Y轴向上右手坐标系, 请先应用骨架旋转"
 
@@ -57,8 +57,8 @@ class O_BoneEditZUp(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BoneEditUpRight(bpy.types.Operator):
-    bl_idname = "bone.edit_upright"
-    bl_label = "自动摆正骨骼"
+    bl_idname = "xbone.edit_upright"
+    bl_label = "自动摆正"
     bl_description = "选择当前朝向相近的正交方向 by 夜曲"
 
     def execute(self, context):
@@ -93,7 +93,7 @@ class O_BoneEditUpRight(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BoneEditX90(bpy.types.Operator):
-    bl_idname = "bone.edit_x90"
+    bl_idname = "xbone.edit_x90"
     bl_label = "绕x旋转90°"
     bl_description = ""
 
@@ -127,7 +127,7 @@ class O_BoneEditX90(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BoneEditY90(bpy.types.Operator):
-    bl_idname = "bone.edit_y90"
+    bl_idname = "xbone.edit_y90"
     bl_label = "绕y旋转90°"
     bl_description = ""
 
@@ -155,7 +155,7 @@ class O_BoneEditY90(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BoneEditZ90(bpy.types.Operator):
-    bl_idname = "bone.edit_z90"
+    bl_idname = "xbone.edit_z90"
     bl_label = "绕z旋转90°"
     bl_description = ""
 
@@ -185,9 +185,9 @@ class O_BoneEditZ90(bpy.types.Operator):
 ########################## Divider ##########################
 
 class O_BoneConnect(bpy.types.Operator):
-    bl_idname = "bone.connect"
-    bl_label = "选中骨骼取消相连项"
-    bl_description = "编辑模式下选择骨骼取消与父级的相连"
+    bl_idname = "xbone.connect"
+    bl_label = "选中取消相连"
+    bl_description = ""
 
     def execute(self, context):
 
@@ -200,8 +200,8 @@ class O_BoneConnect(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BoneAllConnect(bpy.types.Operator):
-    bl_idname = "bone.all_connect"
-    bl_label = "骨架内所有骨骼取消相连项"
+    bl_idname = "xbone.all_connect"
+    bl_label = "所有取消相连"
     bl_description = ""
 
     def execute(self, context):
@@ -228,7 +228,7 @@ class P_BoneEdit(bpy.types.Panel):
     bl_label = "编辑模式"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Bone+'  # 这里设置自定义标签的名称
+    bl_category = 'XBone'  # 这里设置自定义标签的名称
     #bl_options = {'DEFAULT_CLOSED'} #默认折叠
 
     def draw(self, context):
@@ -238,15 +238,16 @@ class P_BoneEdit(bpy.types.Panel):
             row = col.row(align=True)
             row.operator(O_BoneEditYUp.bl_idname, text=O_BoneEditYUp.bl_label)
             row.operator(O_BoneEditZUp.bl_idname, text=O_BoneEditZUp.bl_label)
-            col.operator(O_BoneEditUpRight.bl_idname, text=O_BoneEditUpRight.bl_label)
+            row.operator(O_BoneEditUpRight.bl_idname, text=O_BoneEditUpRight.bl_label)
             #摆正后各方向旋转
             row = col.row(align=True)
             row.operator(O_BoneEditX90.bl_idname, text="X 90", icon="DRIVER_ROTATIONAL_DIFFERENCE")
             row.operator(O_BoneEditY90.bl_idname, text="Y 90", icon="DRIVER_ROTATIONAL_DIFFERENCE")
             row.operator(O_BoneEditZ90.bl_idname, text="Z 90", icon="DRIVER_ROTATIONAL_DIFFERENCE")
 
-            layout.operator(O_BoneConnect.bl_idname, text=O_BoneConnect.bl_label)       
-            layout.operator(O_BoneAllConnect.bl_idname, text=O_BoneAllConnect.bl_label)
+            row = col.row(align=True)
+            row.operator(O_BoneConnect.bl_idname, text=O_BoneConnect.bl_label)       
+            row.operator(O_BoneAllConnect.bl_idname, text=O_BoneAllConnect.bl_label)
 
 # 注册插件
 def register():

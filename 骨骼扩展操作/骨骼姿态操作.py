@@ -8,7 +8,7 @@ from bpy_extras.io_utils import ImportHelper # type: ignore
 ########################## Divider ##########################
 
 class O_BonePoseYUp(bpy.types.Operator):
-    bl_idname = "bone.pose_y_up"
+    bl_idname = "xbone.pose_y_up"
     bl_label = "90 0 0"
     bl_description = "选中骨骼Y轴向上右手坐标系, 请先应用骨架旋转"
 
@@ -35,7 +35,7 @@ class O_BonePoseYUp(bpy.types.Operator):
         return {"FINISHED"}
     
 class O_BonePoseZUp(bpy.types.Operator):
-    bl_idname = "bone.pose_z_up"
+    bl_idname = "xbone.pose_z_up"
     bl_label = "0 0 0"
     bl_description = "选中骨骼Z轴向上右手坐标系, 请先应用骨架旋转"
 
@@ -62,8 +62,8 @@ class O_BonePoseZUp(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BonePoseUpRight(bpy.types.Operator):
-    bl_idname = "bone.pose_upright"
-    bl_label = "自动摆正骨骼"
+    bl_idname = "xbone.pose_upright"
+    bl_label = "自动摆正"
     bl_description = "选择当前朝向相近的正交方向 by 夜曲"
 
     def execute(self, context):
@@ -98,7 +98,7 @@ class O_BonePoseUpRight(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BonePoseX90(bpy.types.Operator):
-    bl_idname = "bone.pose_x90"
+    bl_idname = "xbone.pose_x90"
     bl_label = "绕x旋转90°"
     bl_description = ""
 
@@ -132,7 +132,7 @@ class O_BonePoseX90(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BonePoseY90(bpy.types.Operator):
-    bl_idname = "bone.pose_y90"
+    bl_idname = "xbone.pose_y90"
     bl_label = "绕y旋转90°"
     bl_description = ""
     def execute(self, context):
@@ -155,7 +155,7 @@ class O_BonePoseY90(bpy.types.Operator):
         return {"FINISHED"}
     
 class O_BonePoseZ90(bpy.types.Operator):
-    bl_idname = "bone.pose_z90"
+    bl_idname = "xbone.pose_z90"
     bl_label = "绕z旋转90°"
     bl_description = ""
     def execute(self, context):
@@ -178,7 +178,7 @@ class O_BonePoseZ90(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_BonePoseApply(bpy.types.Operator):
-    bl_idname = "bone.pose_apply"
+    bl_idname = "xbone.pose_apply"
     bl_label = "应用骨架和姿态"
     bl_description = ""
     def execute(self, context):
@@ -236,13 +236,13 @@ class O_BonePoseApply(bpy.types.Operator):
         return {"FINISHED"}
 
 class O_InExcelSel(bpy.types.Operator, ImportHelper):
-    bl_idname = "excel.bone_sel"
+    bl_idname = "xbone.excel_bone_sel"
     bl_label = "导入Excel并选择骨骼"
     filename_ext = ".xlsx"
 
     def execute(self, context):
         excel_file = self.filepath
-        bone_sel_col = context.scene.bone_sel_col - 1 #excel从0开始数列
+        bone_sel_col = context.scene.bone_sel_col #excel从0开始数列
         bone_sel = []
 
         if not excel_file or not os.path.exists(excel_file):
@@ -273,58 +273,41 @@ class O_InExcelSel(bpy.types.Operator, ImportHelper):
         return {'FINISHED'}
 
 class O_BonePosePrint(bpy.types.Operator):
-    bl_idname = "bone.pose_print"
-    bl_label = "打印选择骨骼名称"
-    bl_description = ""
-    def execute(self, context):
-        for bone in context.selected_pose_bones:
-            print(bone.name)
-
-        return {"FINISHED"}
-
-class O_BonePoseLayersMerge(bpy.types.Operator):
-    bl_idname = "bone.pose_layers_merge"
-    bl_label = "骨骼层合并"
-    bl_description = "将所有骨骼层合并到第一层"
-    def execute(self, context):
-        armature = bpy.context.active_object
-        # 遍历所有的骨骼层
-        for bone_layer in range(len(armature.data.layers)):
-            bpy.context.object.data.layers[bone_layer] = True
-            bpy.ops.pose.select_all(action='SELECT')
-            bpy.ops.pose.bone_layers(layers=(True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False))
-
-        bpy.context.object.data.layers[0] = True
-        self.report({'INFO'}, "已将所有骨骼层合并到第一层")
-        return {"FINISHED"}
+    bl_idname = "xbone.pose_print"
+    bl_label = ""
+    bl_description = "打印并复制选择的骨骼名称到剪贴板"
     
-class O_BonePoseLayersDel(bpy.types.Operator):
-    bl_idname = "bone.pose_layers_del"
-    bl_label = "骨骼层删除"
-    bl_description = "删除第一层以外的其他骨骼"
     def execute(self, context):
-        armature = bpy.context.active_object
-        bpy.ops.object.mode_set(mode='EDIT')
-        # 遍历所有的骨骼层
-        for bone_layer in range(len(armature.data.layers)):
-            if bone_layer == 0 :
-                bpy.context.object.data.layers[bone_layer] = False
-                continue
-            bpy.context.object.data.layers[bone_layer] = True
-            bpy.ops.armature.select_all(action='SELECT')
-            bpy.ops.armature.delete()
-
-        bpy.ops.object.mode_set(mode='POSE')
-        bpy.context.object.data.layers[0] = True
-        self.report({'INFO'}, "已删除第一层以外的其他骨骼")
+        selected_bones = context.selected_pose_bones
+        if not selected_bones:
+            self.report({'WARNING'}, "没有选择任何骨骼")
+            return {"CANCELLED"}
+        
+        # 收集所有骨骼名称
+        bone_names = [bone.name for bone in selected_bones]
+        output_text = "\n".join(bone_names)
+        
+        # 打印到控制台
+        print("选择的骨骼名称:")
+        print(output_text)
+        
+        # 复制到Blender剪贴板
+        try:
+            context.window_manager.clipboard = output_text
+            self.report({'INFO'}, f"已复制 {len(bone_names)} 个骨骼名称到剪贴板")
+        except Exception as e:
+            self.report({'ERROR'}, f"复制到剪贴板失败: {str(e)}")
+            return {"CANCELLED"}
+        
         return {"FINISHED"}
+
 
 class P_BonePose(bpy.types.Panel):
     bl_idname = "X_PT_BonePose"
     bl_label = "姿态模式"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Bone+'  # 这里设置自定义标签的名称
+    bl_category = 'XBone'  # 这里设置自定义标签的名称
     #bl_options = {'DEFAULT_'} #默认折叠
 
     def draw(self, context):
@@ -334,7 +317,7 @@ class P_BonePose(bpy.types.Panel):
             row = col.row(align=True)
             row.operator(O_BonePoseYUp.bl_idname, text=O_BonePoseYUp.bl_label)
             row.operator(O_BonePoseZUp.bl_idname, text=O_BonePoseZUp.bl_label)
-            col.operator(O_BonePoseUpRight.bl_idname, text=O_BonePoseUpRight.bl_label)
+            row.operator(O_BonePoseUpRight.bl_idname, text=O_BonePoseUpRight.bl_label)
             #摆正后各方向旋转
             row = col.row(align=True)
             row.operator(O_BonePoseX90.bl_idname, text="X 90", icon="DRIVER_ROTATIONAL_DIFFERENCE")
@@ -346,18 +329,10 @@ class P_BonePose(bpy.types.Panel):
 
             col = layout.column(align=True)
             row = col.row(align=True)
-            row.prop(context.scene, "bone_sel_col", text="骨骼列")
+            row.prop(context.scene, "bone_sel_col", text="索引")
             row.operator(O_InExcelSel.bl_idname, text=O_InExcelSel.bl_label)
-            # 打印选择骨骼的名称
-            row = col.row(align=True)
-            row.operator(O_BonePosePrint.bl_idname, text=O_BonePosePrint.bl_label)
+            row.operator(O_BonePosePrint.bl_idname, text=O_BonePosePrint.bl_label, icon='COPYDOWN')
 
-
-
-            # 合并骨骼层、删除骨骼层
-            row = layout.row(align=True)
-            row.operator(O_BonePoseLayersMerge.bl_idname, text=O_BonePoseLayersMerge.bl_label)
-            row.operator(O_BonePoseLayersDel.bl_idname, text=O_BonePoseLayersDel.bl_label)
 
 
 
@@ -373,14 +348,12 @@ def register():
     bpy.utils.register_class(O_BonePoseApply)
     bpy.utils.register_class(O_InExcelSel)
     bpy.utils.register_class(O_BonePosePrint)
-    bpy.utils.register_class(O_BonePoseLayersMerge)
-    bpy.utils.register_class(O_BonePoseLayersDel)
     bpy.utils.register_class(P_BonePose)
 
     bpy.types.Scene.bone_sel_col = bpy.props.IntProperty(
         name="骨骼列",
-        default=1,
-        min=1,
+        default=0,
+        min=0,
     )
 
 # 注销插件
@@ -394,8 +367,6 @@ def unregister():
     bpy.utils.unregister_class(O_BonePoseApply)
     bpy.utils.unregister_class(O_InExcelSel)
     bpy.utils.unregister_class(O_BonePosePrint)
-    bpy.utils.unregister_class(O_BonePoseLayersMerge)
-    bpy.utils.unregister_class(O_BonePoseLayersDel)
     bpy.utils.unregister_class(P_BonePose)
 
     del bpy.types.Scene.bone_sel_col

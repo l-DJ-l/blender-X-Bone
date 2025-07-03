@@ -42,7 +42,7 @@ class DATA_PT_vertex_group_tools(bpy.types.Panel):
         row.operator(O_VertexGroupsSortMatch.bl_idname, text=O_VertexGroupsSortMatch.bl_label, icon="SORTSIZE")
 
 class O_VertexGroupsCount(bpy.types.Operator):
-    bl_idname = "vertex_groups.count"
+    bl_idname = "xbone.vertex_groups_count"
     bl_label = "统计有无权重数量"
     bl_description = "统计活动物体顶点组中有权重和无权重的数量"
     
@@ -88,7 +88,7 @@ class O_VertexGroupsCount(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_VertexGroupsDelNoneActive(bpy.types.Operator):
-    bl_idname = "vertex_groups.del_none_active"
+    bl_idname = "xbone.vertex_groups_del_none_active"
     bl_label = "删除无权重顶点组"
     bl_description = "删除活动物体中没有顶点权重的顶点组"
     
@@ -135,7 +135,7 @@ class O_VertexGroupsDelNoneActive(bpy.types.Operator):
         return {'FINISHED'}
 
 class O_VertexGroupsMatchRename(bpy.types.Operator):
-    bl_idname = "vertex_groups.match_rename"
+    bl_idname = "xbone.vertex_groups_match_rename"
     bl_label = "匹配重命名顶点组"
     bl_description = "基于权重匹配重命名活动物体的顶点组（需选择2个网格物体）\n我用来给鸣潮提取的模型按解包的模型骨骼重命名，这样顶点组有名称意义也可以操控"
     
@@ -278,7 +278,7 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
 
 
 class O_VertexGroupsSortMatch(bpy.types.Operator):
-    bl_idname = "vertex_groups.sort_match"
+    bl_idname = "xbone.vertex_groups_sort_match"
     bl_label = "匹配排序顶点组"
     bl_description = ("严格按照选择物体的顶点组顺序重新排列活动物体的顶点组\n"
                      "操作逻辑:\n"
