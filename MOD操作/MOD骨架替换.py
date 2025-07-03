@@ -70,7 +70,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
             return {'FINISHED'}
         
         csv_data = O_ImportCSV.csv_data
-        simple_main_column = context.scene.simple_main_column # CSV从0开始数列
+        simple_main_column = context.scene.simple_main_column #0开始数列
         simple_save_column = context.scene.simple_save_column
         simple_toactive_column = context.scene.simple_toactive_column
         simple_active_column = context.scene.simple_active_column

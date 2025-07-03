@@ -1,8 +1,9 @@
-import bpy # type: ignore
+# type: ignore
+import bpy
 import math
 from mathutils import Euler, Matrix, Vector, Quaternion # type: ignore
 import os 
-import openpyxl # type: ignore
+import csv # type: ignore
 from bpy_extras.io_utils import ImportHelper # type: ignore
 
 ########################## Divider ##########################
@@ -235,41 +236,67 @@ class O_BonePoseApply(bpy.types.Operator):
 
         return {"FINISHED"}
 
-class O_InExcelSel(bpy.types.Operator, ImportHelper):
-    bl_idname = "xbone.excel_bone_sel"
-    bl_label = "导入Excel并选择骨骼"
-    filename_ext = ".xlsx"
+class O_InCSVSel(bpy.types.Operator, ImportHelper):
+    bl_idname = "xbone.csv_bone_sel"
+    bl_label = "导入CSV并选择骨骼"
+    filename_ext = ".csv"
+    filter_glob: bpy.props.StringProperty(
+        default="*.csv",
+        options={'HIDDEN'},
+    )
+
+    # 添加编码选择属性
+    encoding: bpy.props.EnumProperty(
+        name="文件编码",
+        description="选择CSV文件的编码格式",
+        items=[
+            ('utf-8', "UTF-8", "标准UTF-8编码"),
+            ('gbk', "GBK", "简体中文编码"),
+        ],
+        default='utf-8',
+    )
 
     def execute(self, context):
-        excel_file = self.filepath
-        bone_sel_col = context.scene.bone_sel_col #excel从0开始数列
+        csv_file = self.filepath
+        bone_sel_col = context.scene.bone_sel_col  # CSV从0开始数列
         bone_sel = []
 
-        if not excel_file or not os.path.exists(excel_file):
-            self.report({'ERROR'}, "请选择有效的Excel文件")
+        if not csv_file or not os.path.exists(csv_file):
+            self.report({'ERROR'}, "请选择有效的CSV文件")
             return {'CANCELLED'}
 
         try:
-            # 打开Excel文件
-            workbook = openpyxl.load_workbook(excel_file)
-            sheet = workbook.active
+            # 读取CSV文件
+            with open(csv_file, 'r', newline='', encoding=self.encoding) as file:
+                reader = csv.reader(file)
+                # 跳过标题行，从第二行开始读取数据
+                next(reader)  # 跳过第一行
+                
+                for row in reader:
+                    if len(row) <= bone_sel_col:
+                        continue  # 跳过列数不足的行
+                    value = str(row[bone_sel_col]).strip()
+                    if not value or value == "None":
+                        continue
+                    bone_sel.append(value)
 
-            # 读取Excel文件中的数据，并更新列表,min_row表示从第二行开始
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                value = str(row[bone_sel_col])
-                if (not value) or (value == "None"):
-                    continue
-                bone_sel.append(value)
-
+        except UnicodeDecodeError:
+            self.report({'ERROR'}, f"无法用{self.encoding}解码文件，请尝试其他编码")
+            return {'CANCELLED'}
         except Exception as e:
-            self.report({'ERROR'}, f"导入Excel文件时出现错误: {e}")
+            self.report({'ERROR'}, f"导入CSV文件时出现错误: {e}")
             return {'CANCELLED'}
         
+        # 选择骨骼
         bpy.ops.pose.select_all(action='DESELECT')
+        selected_count = 0
         for bone_name in bone_sel:
-            bpy.ops.object.select_pattern(pattern=bone_name)
+            # 使用更可靠的选择方式
+            if bone_name in context.active_object.pose.bones:
+                context.active_object.pose.bones[bone_name].bone.select = True
+                selected_count += 1
 
-        self.report({'INFO'}, f"以选择{len(bone_sel)}个骨骼")
+        self.report({'INFO'}, f"已选择 {selected_count}/{len(bone_sel)} 个骨骼")
         return {'FINISHED'}
 
 class O_BonePosePrint(bpy.types.Operator):
@@ -330,7 +357,7 @@ class P_BonePose(bpy.types.Panel):
             col = layout.column(align=True)
             row = col.row(align=True)
             row.prop(context.scene, "bone_sel_col", text="索引")
-            row.operator(O_InExcelSel.bl_idname, text=O_InExcelSel.bl_label)
+            row.operator(O_InCSVSel.bl_idname, text=O_InCSVSel.bl_label)
             row.operator(O_BonePosePrint.bl_idname, text=O_BonePosePrint.bl_label, icon='COPYDOWN')
 
 
@@ -346,7 +373,7 @@ def register():
     bpy.utils.register_class(O_BonePoseY90)
     bpy.utils.register_class(O_BonePoseZ90)
     bpy.utils.register_class(O_BonePoseApply)
-    bpy.utils.register_class(O_InExcelSel)
+    bpy.utils.register_class(O_InCSVSel)
     bpy.utils.register_class(O_BonePosePrint)
     bpy.utils.register_class(P_BonePose)
 
@@ -365,7 +392,7 @@ def unregister():
     bpy.utils.unregister_class(O_BonePoseY90)
     bpy.utils.unregister_class(O_BonePoseZ90)
     bpy.utils.unregister_class(O_BonePoseApply)
-    bpy.utils.unregister_class(O_InExcelSel)
+    bpy.utils.unregister_class(O_InCSVSel)
     bpy.utils.unregister_class(O_BonePosePrint)
     bpy.utils.unregister_class(P_BonePose)
 

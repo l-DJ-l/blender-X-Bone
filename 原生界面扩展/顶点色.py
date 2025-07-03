@@ -43,14 +43,14 @@ class DATA_PT_color_attribute_tools(bpy.types.Panel):
         col = layout.column(align=True)
         row = col.row(align=True)
         row.prop(scene, "color_attr_add_count", text="数量")
-        row.operator("color_attr.add_rename", text="添加并重命名", icon='ADD')
+        row.operator(O_AddRenameColorAttributes.bl_idname, text="添加并重命名", icon='ADD')
         
         
 
         # 添加颜色按钮
         col = layout.column(align=True)
         row = col.row(align=True)
-        row.operator("color_attr.add_color", text="添加颜色", icon='ADD')
+        row.operator(O_AddColor.bl_idname, text="添加颜色", icon='ADD')
         
         # 调色板颜色列表
         for i, color_item in enumerate(scene.palette_colors):
@@ -58,11 +58,11 @@ class DATA_PT_color_attribute_tools(bpy.types.Panel):
             row.prop(color_item, "color", text="")
             
             # 应用颜色按钮
-            op = row.operator("color_attr.apply_color", text="", icon='BRUSH_DATA')
+            op = row.operator(O_ApplyColor.bl_idname, text="", icon='BRUSH_DATA')
             op.color_index = i
 
             # 删除颜色按钮
-            op = row.operator("color_attr.remove_color", text="", icon='X')
+            op = row.operator(O_RemoveColor.bl_idname, text="", icon='X')
             op.color_index = i
         
 
