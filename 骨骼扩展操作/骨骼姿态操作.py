@@ -239,6 +239,7 @@ class O_BonePoseApply(bpy.types.Operator):
 class O_InCSVSel(bpy.types.Operator, ImportHelper):
     bl_idname = "xbone.csv_bone_sel"
     bl_label = "导入CSV并选择骨骼"
+    bl_description = "导入时右上角选择编码格式"
     filename_ext = ".csv"
     filter_glob: bpy.props.StringProperty(
         default="*.csv",

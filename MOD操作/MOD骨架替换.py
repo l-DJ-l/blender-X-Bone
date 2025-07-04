@@ -14,7 +14,7 @@ class ObjType(bpy.types.Operator):
 class O_ImportCSV(bpy.types.Operator, ImportHelper):
     bl_idname = "xbone.csv_import"
     bl_label = "导入CSV"
-    bl_description = ""
+    bl_description = "导入时右上角选择编码格式"
     filename_ext = ".csv"
     filter_glob: bpy.props.StringProperty(
         default="*.csv",
