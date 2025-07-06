@@ -1,6 +1,7 @@
 # type: ignore
 import bpy
 import numpy as np
+import time
 from typing import Dict, Tuple, Set, List, Optional
 
 class DATA_PT_vertex_group_tools(bpy.types.Panel):
@@ -140,17 +141,17 @@ class O_VertexGroupsDelNoneActive(bpy.types.Operator):
 
         return {'FINISHED'}
 
-
 class O_VertexGroupsMatchRename(bpy.types.Operator):
     bl_idname = "xbone.vertex_groups_match_rename"
     bl_label = "匹配重命名"
-    bl_description = ("基于权重匹配重命名活动物体的顶点组（需选择2个网格物体）\n"
+    bl_description = ("基于顶点平均位置匹配重命名活动物体的顶点组（需选择2个网格物体）\n"
                      "我用来给鸣潮提取的模型按解包的模型骨骼重命名，这样顶点组有名称意义也可以操控")
-    
     
     def execute(self, context: bpy.types.Context) -> Set[str]:
         self.similarity_threshold = context.scene.similarity_threshold
         """主执行函数"""
+        start_time = time.time()  # 记录开始时间
+        
         try:
             # 验证输入并获取目标物体
             obj_a, obj_b = self._validate_input(context)
@@ -161,16 +162,21 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
             # 打印详细结果到控制台
             self._print_detailed_results(obj_a, obj_b, result)
             
+            # 计算总耗时
+            elapsed_time = time.time() - start_time
+            time_msg = f"总耗时: {elapsed_time:.2f}秒"
+            
             # 根据结果返回适当的消息
             if result['renamed_count'] > 0:
-                self.report({'INFO'}, f"成功匹配重命名 {result['renamed_count']} 个顶点组 (详见控制台)")
+                self.report({'INFO'}, f"成功匹配重命名 {result['renamed_count']} 个顶点组 ({time_msg})")
             else:
-                self.report({'WARNING'}, "没有找到匹配的顶点组 (详见控制台)")
+                self.report({'WARNING'}, f"没有找到匹配的顶点组 ({time_msg})")
                 
             return {'FINISHED'}
             
         except Exception as e:
-            self.report({'ERROR'}, str(e))
+            elapsed_time = time.time() - start_time
+            self.report({'ERROR'}, f"{str(e)} (耗时: {elapsed_time:.2f}秒)")
             return {'CANCELLED'}
     
     def _validate_input(self, context: bpy.types.Context) -> Tuple[bpy.types.Object, bpy.types.Object]:
@@ -200,77 +206,77 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
             
         return obj_a, obj_b
     
-    def _get_sorted_weights(self, obj: bpy.types.Object) -> Dict[str, Tuple[bpy.types.VertexGroup, np.ndarray]]:
-        """获取物体非空顶点组的排序权重"""
-        weights_data = {}
+    def _get_vertex_group_centers(self, obj: bpy.types.Object) -> Dict[str, np.ndarray]:
+        """获取每个顶点组的中心位置（平均位置）"""
+        centers = {}
         mesh = obj.data
+        global_verts = np.zeros((len(mesh.vertices), 3))
+        
+        # 获取所有顶点的局部坐标
+        mesh.vertices.foreach_get('co', global_verts.ravel())
+        
+        # 转换为全局坐标
+        matrix = np.array(obj.matrix_world)
+        global_verts = np.dot(global_verts, matrix[:3, :3].T) + matrix[:3, 3]
         
         for vg in obj.vertex_groups:
-            weights = np.zeros(len(mesh.vertices))
-            has_weights = False
+            vertex_indices = []
             
-            # 使用更高效的方式获取权重
+            # 获取顶点组中的所有顶点索引
             for vid in range(len(mesh.vertices)):
                 try:
-                    weight = vg.weight(vid)
-                    weights[vid] = weight
-                    if weight > 0:
-                        has_weights = True
+                    if vg.weight(vid) > 0:
+                        vertex_indices.append(vid)
                 except RuntimeError:
                     pass
             
-            if has_weights:
-                sorted_weights = np.sort(weights)
-                weights_data[vg.name] = (vg, sorted_weights)
+            if vertex_indices:
+                # 计算这些顶点的平均位置
+                centers[vg.name] = np.mean(global_verts[vertex_indices], axis=0)
         
-        return weights_data
+        return centers
     
-    def _calculate_similarity(self, a_weights: np.ndarray, b_weights: np.ndarray) -> float:
-        """计算两组权重之间的相似度"""
-        # 使用余弦相似度
-        dot_product = np.dot(a_weights, b_weights)
-        norm_a = np.linalg.norm(a_weights)
-        norm_b = np.linalg.norm(b_weights)
-        
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-            
-        return dot_product / (norm_a * norm_b)
+    def _calculate_similarity(self, pos_a: np.ndarray, pos_b: np.ndarray) -> float:
+        """计算两个位置之间的相似度（基于距离）"""
+        distance = np.linalg.norm(pos_a - pos_b)
+        # 将距离转换为相似度（距离越小，相似度越高）
+        # 使用简单的转换：相似度 = 1 / (1 + 距离)
+        return 1.0 / (1.0 + distance)
     
     def _rename_matching_vertex_groups(self, 
                                      obj_a: bpy.types.Object, 
                                      obj_b: bpy.types.Object) -> Dict[str, any]:
         """匹配并重命名顶点组"""
-        weights_a = self._get_sorted_weights(obj_a)
-        weights_b = self._get_sorted_weights(obj_b)
+        centers_a = self._get_vertex_group_centers(obj_a)
+        centers_b = self._get_vertex_group_centers(obj_b)
         
         # 检查非空顶点组
-        if not weights_a:
+        if not centers_a:
             raise Exception("A物体没有非空顶点组")
-        if not weights_b:
+        if not centers_b:
             raise Exception("B物体没有非空顶点组")
         
         renamed_count = 0
         matched_a_groups: Set[str] = set()
         matches: List[Tuple[str, Optional[str], str]] = []  # (b_name, a_name, similarity)
         
-        for b_name, (vg_b, b_weights) in weights_b.items():
+        for b_name, b_center in centers_b.items():
             best_match_name = None
             best_similarity = 0.0
             
             # 寻找最佳匹配
-            for a_name, (vg_a, a_weights) in weights_a.items():
+            for a_name, a_center in centers_a.items():
                 if a_name in matched_a_groups:
                     continue
                     
-                similarity = self._calculate_similarity(a_weights, b_weights)
+                similarity = self._calculate_similarity(a_center, b_center)
                 if similarity > best_similarity and similarity >= self.similarity_threshold:
                     best_similarity = similarity
                     best_match_name = a_name
             
             # 执行重命名
             if best_match_name:
-                vg_b.name = best_match_name
+                obj_b.vertex_groups[b_name].name = best_match_name
                 matched_a_groups.add(best_match_name)
                 renamed_count += 1
                 matches.append((b_name, best_match_name, f"{best_similarity:.3f}"))
@@ -280,8 +286,8 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
         return {
             'renamed_count': renamed_count,
             'matches': matches,
-            'total_a': len(weights_a),
-            'total_b': len(weights_b)
+            'total_a': len(centers_a),
+            'total_b': len(centers_b)
         }
     
     def _print_detailed_results(self, 
@@ -299,7 +305,7 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
         print(f"{'B物体原始名称':<30} {'重命名为':<30} {'相似度':<20}")
         print("-" * 80)
         
-        matched = 0
+        matched = 0 
         unmatched = 0
         
         for b_name, a_name, similarity in result['matches']:
@@ -318,6 +324,7 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
         print(f"  未匹配数量: {unmatched}")
         print(f"  总重命名数量: {result['renamed_count']}")
         print(separator)
+
 
 class O_VertexGroupsSortMatch(bpy.types.Operator):
     bl_idname = "xbone.vertex_groups_sort_match"
@@ -444,7 +451,7 @@ def register():
     bpy.types.Scene.similarity_threshold = bpy.props.FloatProperty(
         name="相似度阈值",
         description="匹配顶点组时的最小相似度(0-1)",
-        default=0.99,
+        default=0.94,
         min=0.9,
         max=1.0,
         step=0.01,
