@@ -236,6 +236,71 @@ class O_BonePoseApply(bpy.types.Operator):
 
         return {"FINISHED"}
 
+class O_SwapPoseRest(bpy.types.Operator):
+    """交换所选骨骼的姿态位置和静置位置"""
+    bl_idname = "xbone.swap_pose_and_rest"
+    bl_label = "交换姿态和静置"
+    bl_description = "将当前姿态与静置位置交换\n如果已经在静置位置，就变成静置和静置交换了\n不选中为全选"
+    bl_options = {'REGISTER', 'UNDO'}  # 注册操作并支持撤销
+    
+    @classmethod
+    def poll(cls, context):
+        """检查是否满足操作条件"""
+        # 必须有一个选中的物体，且是骨架类型，并且当前处于姿态模式
+        return (context.object and 
+                context.object.type == 'ARMATURE' and 
+                context.object.mode == 'POSE')
+    
+    def execute(self, context):
+        """执行交换操作"""
+        # 获取当前选中的骨架对象
+        armature = context.object
+        # 获取选中的姿态骨骼，如果没有选中则使用所有姿态骨骼
+        pose_bones = context.selected_pose_bones or armature.pose.bones
+        
+        # 存储原始变换数据
+        original_transforms = {}
+        for bone in pose_bones:
+            # 保存每个骨骼的矩阵和基础矩阵
+            original_transforms[bone.name] = {
+                'matrix': bone.matrix.copy(),          # 骨骼的全局变换矩阵
+                'matrix_basis': bone.matrix_basis.copy()  # 骨骼的局部变换矩阵
+            }
+        
+        # 切换到编辑模式以修改静置位置
+        bpy.ops.object.mode_set(mode='EDIT')
+        # 获取编辑模式下的骨骼数据
+        edit_bones = armature.data.edit_bones
+        
+        # 遍历所有需要处理的骨骼
+        for bone_name, transforms in original_transforms.items():
+            edit_bone = edit_bones.get(bone_name)
+            if edit_bone:
+                # 保存原始的静置位置数据
+                original_matrix = edit_bone.matrix.copy()  # 骨骼变换矩阵
+                
+                # 将静置位置设置为当前姿态位置
+                pose_matrix = transforms['matrix']
+                edit_bone.matrix = pose_matrix
+                
+                # 切换回姿态模式设置新的姿态
+                bpy.ops.object.mode_set(mode='POSE')
+                
+                # 将姿态设置为原始的静置位置
+                pose_bone = armature.pose.bones[bone_name]
+                pose_bone.matrix = original_matrix
+                
+                # 切换回编辑模式处理下一个骨骼
+                bpy.ops.object.mode_set(mode='EDIT')
+        
+        # 完成后返回姿态模式
+        bpy.ops.object.mode_set(mode='POSE')
+        
+        # 报告操作结果
+        self.report({'INFO'}, f"已交换{len(pose_bones)}根骨骼的姿态和静置位置")
+        return {'FINISHED'}
+    
+
 class O_InCSVSel(bpy.types.Operator, ImportHelper):
     bl_idname = "xbone.csv_bone_sel"
     bl_label = "导入CSV并选择骨骼"
@@ -354,6 +419,7 @@ class P_BonePose(bpy.types.Panel):
             #快速应用为静止姿态，而物体不形变（先物体应用骨骼修改器）
             row = col.row(align=True)
             row.operator(O_BonePoseApply.bl_idname, text=O_BonePoseApply.bl_label)
+            row.operator(O_SwapPoseRest.bl_idname, text=O_SwapPoseRest.bl_label)
 
             col = layout.column(align=True)
             row = col.row(align=True)
@@ -374,6 +440,7 @@ def register():
     bpy.utils.register_class(O_BonePoseY90)
     bpy.utils.register_class(O_BonePoseZ90)
     bpy.utils.register_class(O_BonePoseApply)
+    bpy.utils.register_class(O_SwapPoseRest)
     bpy.utils.register_class(O_InCSVSel)
     bpy.utils.register_class(O_BonePosePrint)
     bpy.utils.register_class(P_BonePose)
@@ -393,6 +460,7 @@ def unregister():
     bpy.utils.unregister_class(O_BonePoseY90)
     bpy.utils.unregister_class(O_BonePoseZ90)
     bpy.utils.unregister_class(O_BonePoseApply)
+    bpy.utils.unregister_class(O_SwapPoseRest)
     bpy.utils.unregister_class(O_InCSVSel)
     bpy.utils.unregister_class(O_BonePosePrint)
     bpy.utils.unregister_class(P_BonePose)

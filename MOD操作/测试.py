@@ -13,6 +13,7 @@ class P_DEMO(bpy.types.Panel):
         layout = self.layout
         col = layout.column(align=True)
         col.operator(MiniPlaneOperator.bl_idname, icon="MESH_CUBE")
+        col.operator(RenameToComponents.bl_idname, icon="OUTLINER_OB_EMPTY")
 
 
 class MiniPlaneOperator(bpy.types.Operator):
@@ -110,13 +111,37 @@ class MiniPlaneOperator(bpy.types.Operator):
 
         return {'FINISHED'}
 
+class RenameToComponents(bpy.types.Operator):
+    bl_idname = "xbone.rename_to_components"
+    bl_label = "重命名为Components格式"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        selected_objects = bpy.context.selected_objects
+        
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected")
+            return {'CANCELLED'}
+        
+        sorted_objects = sorted(selected_objects, key=lambda obj: obj.name)
+        
+        for index, obj in enumerate(sorted_objects, start=0):
+            old_name = obj.name
+            new_name = f"Component {index}"
+            obj.name = new_name
+            print(f"Renamed '{old_name}' to '{new_name}'")
+        
+        self.report({'INFO'}, f"Renamed {len(selected_objects)} objects")
+        return {'FINISHED'}
 
 def register():
     bpy.utils.register_class(P_DEMO)
     bpy.utils.register_class(MiniPlaneOperator)
+    bpy.utils.register_class(RenameToComponents)
     
 
 def unregister():
     bpy.utils.unregister_class(P_DEMO)
     bpy.utils.unregister_class(MiniPlaneOperator)
+    bpy.utils.unregister_class(RenameToComponents)
     

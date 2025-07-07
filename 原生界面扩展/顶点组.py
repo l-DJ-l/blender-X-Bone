@@ -200,9 +200,6 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
         if obj_a.type != 'MESH' or obj_b.type != 'MESH':
             raise ValueError("两个物体都必须是网格类型")
             
-        # 验证顶点数
-        if len(obj_a.data.vertices) != len(obj_b.data.vertices):
-            raise ValueError("两个物体的顶点数不相同")
             
         return obj_a, obj_b
     
