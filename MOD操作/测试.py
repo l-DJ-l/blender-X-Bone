@@ -2,6 +2,13 @@
 import bpy
 import random
 
+class ObjType(bpy.types.Operator):
+    def is_mesh(scene, obj):
+        return obj.type == "MESH"
+    
+    def is_armature(scene, obj):
+        return obj.type == "ARMATURE"
+
 class P_DEMO(bpy.types.Panel):
     bl_label = "测试"
     bl_idname = "X_PT_DEMO"
@@ -14,6 +21,23 @@ class P_DEMO(bpy.types.Panel):
         col = layout.column(align=True)
         col.operator(MiniPlaneOperator.bl_idname, icon="MESH_CUBE")
         col.operator(RenameToComponents.bl_idname, icon="OUTLINER_OB_EMPTY")
+
+        box = layout.box()
+        col = box.column(align=True)
+        col.prop(context.scene, "sk_source_mesh", text = "", icon="MESH_DATA")
+        if context.scene.sk_source_mesh:
+            armature_mod = None
+            armature_modifiers = [mod for mod in context.scene.sk_source_mesh.modifiers if mod.type == 'ARMATURE']
+            
+            if armature_modifiers:
+                if len(armature_modifiers) == 1:
+                    armature_mod = armature_modifiers[0]
+                    col.label(text=f"骨架: {armature_mod.object.name if armature_mod.object else '无'}", icon='ARMATURE_DATA')
+                else:
+                    col.label(text="错误: 物体有多个骨架修改器", icon='ERROR')
+            else:
+                col.label(text="错误: 物体没有骨架修改器", icon='ERROR')
+        col.operator(ApplyAsShapekey.bl_idname, icon="SHAPEKEY_DATA")
 
 
 class MiniPlaneOperator(bpy.types.Operator):
@@ -133,15 +157,86 @@ class RenameToComponents(bpy.types.Operator):
         
         self.report({'INFO'}, f"Renamed {len(selected_objects)} objects")
         return {'FINISHED'}
+    
+class ApplyAsShapekey(bpy.types.Operator):
+    bl_idname = "xbone.apply_as_shapekey"
+    bl_label = "应用为形态键"
+    bl_description = "将当前骨架的姿态应用为目标物体的形态键"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def find_armature_modifier(self, obj):
+        """查找物体的骨架修改器"""
+        armature_modifiers = [mod for mod in obj.modifiers if mod.type == 'ARMATURE']
+        
+        if not armature_modifiers:
+            self.report({'ERROR'}, "物体没有骨架修改器")
+            return None
+            
+        if len(armature_modifiers) > 1:
+            self.report({'ERROR'}, "物体有多个骨架修改器")
+            return None
+            
+        return armature_modifiers[0]
+    
+    def execute(self, context):
+        # 检查目标物体
+        try:
+            obj = bpy.data.objects.get(context.scene.sk_source_mesh.name)
+        except:
+            self.report({'ERROR'}, "似乎没有选择对象") 
+            return {'FINISHED'}
+            
+        
+        # 查找骨架修改器
+        armature_mod = self.find_armature_modifier(obj)
+        if not armature_mod:
+            return {'CANCELLED'}
+            
+        armature = armature_mod.object
+        if not armature:
+            self.report({'ERROR'}, "骨架修改器没有指定骨架")
+            return {'CANCELLED'}
+            
+        # 切换到物体模式
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.context.view_layer.objects.active = obj
+
+        # 确保物体有形态键
+        if not obj.data.shape_keys:
+            obj.shape_key_add(name="Basis", from_mix=False)
+            
+        # 使用骨架修改器的保存为形态键功能
+        try:
+            bpy.ops.object.modifier_apply_as_shapekey(keep_modifier=True, modifier=armature_mod.name)
+            self.report({'INFO'}, f"已为 {obj.name} 从骨架修改器创建形态键")
+        except Exception as e:
+            self.report({'ERROR'}, f"应用形态键失败: {str(e)}")
+            return {'CANCELLED'}
+        finally:
+            # 切换回姿态模式并清空变换
+            bpy.context.view_layer.update()
+            bpy.context.view_layer.objects.active = armature
+            bpy.ops.object.mode_set(mode='POSE')
+            bpy.ops.pose.select_all(action='SELECT')
+            bpy.ops.pose.transforms_clear()
+        
+        return {'FINISHED'}
+    
 
 def register():
     bpy.utils.register_class(P_DEMO)
     bpy.utils.register_class(MiniPlaneOperator)
     bpy.utils.register_class(RenameToComponents)
-    
+    bpy.utils.register_class(ApplyAsShapekey)
+    bpy.types.Scene.sk_source_mesh = bpy.props.PointerProperty(
+        description="选择编辑形态键的物体",
+        type=bpy.types.Object, 
+        poll=ObjType.is_mesh
+        )
 
 def unregister():
     bpy.utils.unregister_class(P_DEMO)
     bpy.utils.unregister_class(MiniPlaneOperator)
     bpy.utils.unregister_class(RenameToComponents)
-    
+    bpy.utils.unregister_class(ApplyAsShapekey)
+    del bpy.types.Scene.sk_source_mesh

@@ -14,23 +14,32 @@ class O_BonePoseYUp(bpy.types.Operator):
     bl_description = "选中骨骼Y轴向上右手坐标系, 请先应用骨架旋转"
 
     def execute(self, context):
-
         obj = context.active_object
-        if obj and obj.type == 'ARMATURE': # 检查对象是否为骨骼对象
-            if context.selected_pose_bones: #有选择骨骼
-
+        if obj and obj.type == 'ARMATURE':
+            if context.selected_pose_bones:
                 order_selected_pose_bones = []
-                for bone1 in obj.pose.bones: #遍历骨架中的每一根骨骼，若被选中则加入list, 保证顺序正确
+                for bone1 in obj.pose.bones:
                     for bone2 in context.selected_pose_bones:
-                        if bone1 == bone2 :
+                        if bone1 == bone2:
                             order_selected_pose_bones.append(bone1)
 
                 for bone in order_selected_pose_bones:
+                    # 获取原始缩放
+                    original_scale = bone.matrix.to_scale()
+                    
+                    # 创建新旋转
                     new_rotation = Euler((math.radians(90), math.radians(0), math.radians(0)), 'XYZ')
                     new_matrix = new_rotation.to_matrix().to_4x4()
+                    
+                    # 应用原始缩放
+                    new_matrix @= Matrix.Scale(original_scale[0], 4, (1, 0, 0))
+                    new_matrix @= Matrix.Scale(original_scale[1], 4, (0, 1, 0))
+                    new_matrix @= Matrix.Scale(original_scale[2], 4, (0, 0, 1))
+                    
+                    # 保持原始位置
                     new_matrix.translation = bone.matrix.translation
+                    
                     bone.matrix = new_matrix
-                    # 刷新
                     bpy.context.view_layer.update()
 
         return {"FINISHED"}
@@ -41,23 +50,32 @@ class O_BonePoseZUp(bpy.types.Operator):
     bl_description = "选中骨骼Z轴向上右手坐标系, 请先应用骨架旋转"
 
     def execute(self, context):
-
         obj = context.active_object
-        if obj and obj.type == 'ARMATURE': # 检查对象是否为骨骼对象
-            if context.selected_pose_bones: #有选择骨骼
-
+        if obj and obj.type == 'ARMATURE':
+            if context.selected_pose_bones:
                 order_selected_pose_bones = []
-                for bone1 in obj.pose.bones: #遍历骨架中的每一根骨骼，若被选中则加入list, 保证顺序正确
+                for bone1 in obj.pose.bones:
                     for bone2 in context.selected_pose_bones:
-                        if bone1 == bone2 :
+                        if bone1 == bone2:
                             order_selected_pose_bones.append(bone1)
 
                 for bone in order_selected_pose_bones:
+                    # 获取原始缩放
+                    original_scale = bone.matrix.to_scale()
+                    
+                    # 创建新旋转
                     new_rotation = Euler((math.radians(0), math.radians(0), math.radians(0)), 'XYZ')
                     new_matrix = new_rotation.to_matrix().to_4x4()
+                    
+                    # 应用原始缩放
+                    new_matrix @= Matrix.Scale(original_scale[0], 4, (1, 0, 0))
+                    new_matrix @= Matrix.Scale(original_scale[1], 4, (0, 1, 0))
+                    new_matrix @= Matrix.Scale(original_scale[2], 4, (0, 0, 1))
+                    
+                    # 保持原始位置
                     new_matrix.translation = bone.matrix.translation
+                    
                     bone.matrix = new_matrix
-                    # 刷新
                     bpy.context.view_layer.update()
 
         return {"FINISHED"}
@@ -68,22 +86,23 @@ class O_BonePoseUpRight(bpy.types.Operator):
     bl_description = "选择当前朝向相近的正交方向 by 夜曲"
 
     def execute(self, context):
-
         target_angles = [-180, -90, 0, 90, 180]
         obj = context.active_object
-        if obj and obj.type == 'ARMATURE': # 检查对象是否为骨骼对象
-            if context.selected_pose_bones: #有选择骨骼
-
+        if obj and obj.type == 'ARMATURE':
+            if context.selected_pose_bones:
                 order_selected_pose_bones = []
-                for bone1 in obj.pose.bones: #遍历骨架中的每一根骨骼，若被选中则加入list, 保证顺序正确
+                for bone1 in obj.pose.bones:
                     for bone2 in context.selected_pose_bones:
-                        if bone1 == bone2 :
+                        if bone1 == bone2:
                             order_selected_pose_bones.append(bone1)
 
                 for bone in order_selected_pose_bones:
+                    # 获取原始缩放
+                    original_scale = bone.matrix.to_scale()
+                    
+                    # 计算新旋转
                     angles_radians = bone.matrix.to_euler()
-                    angles_degrees = (math.degrees(angles_radians.x),math.degrees(angles_radians.y),math.degrees(angles_radians.z))
-
+                    angles_degrees = (math.degrees(angles_radians.x), math.degrees(angles_radians.y), math.degrees(angles_radians.z))
                     x, y, z = angles_degrees
                     x = min(target_angles, key=lambda n: abs(n - x))
                     y = min(target_angles, key=lambda n: abs(n - y))
@@ -91,9 +110,16 @@ class O_BonePoseUpRight(bpy.types.Operator):
                     
                     new_rotation = Euler((math.radians(x), math.radians(y), math.radians(z)), 'XYZ')
                     new_matrix = new_rotation.to_matrix().to_4x4()
+                    
+                    # 应用原始缩放
+                    new_matrix @= Matrix.Scale(original_scale[0], 4, (1, 0, 0))
+                    new_matrix @= Matrix.Scale(original_scale[1], 4, (0, 1, 0))
+                    new_matrix @= Matrix.Scale(original_scale[2], 4, (0, 0, 1))
+                    
+                    # 保持原始位置
                     new_matrix.translation = bone.matrix.translation
+                    
                     bone.matrix = new_matrix
-                    # 刷新
                     bpy.context.view_layer.update()
 
         return {"FINISHED"}

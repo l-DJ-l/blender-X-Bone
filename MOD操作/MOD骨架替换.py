@@ -1,7 +1,7 @@
 # type: ignore
 import bpy
 import os
-import csv
+import csv, json
 from bpy_extras.io_utils import ImportHelper
 
 class ObjType(bpy.types.Operator):
@@ -20,7 +20,6 @@ class O_ImportCSV(bpy.types.Operator, ImportHelper):
         default="*.csv",
         options={'HIDDEN'},
     )
-    csv_data = None  # 用于存储导入的CSV数据
 
     def execute(self, context):
         csv_file = self.filepath
@@ -36,7 +35,9 @@ class O_ImportCSV(bpy.types.Operator, ImportHelper):
             try:
                 with open(csv_file, 'r', newline='', encoding=encoding) as file:
                     reader = csv.reader(file)
-                    O_ImportCSV.csv_data = list(reader)
+                    csv_data = list(reader)
+                    # 存储为 JSON 字符串
+                    context.scene["xbone_csv_data"] = json.dumps(csv_data)
                 
                 self.report({'INFO'}, f"CSV文件已导入({encoding}): {csv_file}")
                 return {'FINISHED'}
@@ -54,13 +55,9 @@ class O_BoneSimpleMapping(bpy.types.Operator):
     bl_idname = "xbone.simple_mapping"
     bl_label = "简化骨骼"
     bl_description = ""
-    # 保存骨骼名称
-    bone_main = []
-    bone_save = []
-    bone_mapping = {}
     
     def execute(self, context):
-        if not O_ImportCSV.csv_data:
+        if context.scene.xbone_csv_data == "":
             self.report({'ERROR'}, "似乎没有导入CSV文件") 
             return {'FINISHED'}
         try:
@@ -69,11 +66,14 @@ class O_BoneSimpleMapping(bpy.types.Operator):
             self.report({'ERROR'}, "似乎没有选择对象") 
             return {'FINISHED'}
         
-        csv_data = O_ImportCSV.csv_data
+        csv_data = json.loads(context.scene["xbone_csv_data"])
         simple_main_column = context.scene.simple_main_column #0开始数列
         simple_save_column = context.scene.simple_save_column
         simple_toactive_column = context.scene.simple_toactive_column
         simple_active_column = context.scene.simple_active_column
+        bone_main = []
+        bone_save = []
+        bone_mapping = {}
         
         # 读取CSV的数据，跳过标题行(第一行)
         for row in csv_data[1:]:
@@ -82,7 +82,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
             value = str(row[simple_main_column])
             if (not value) or (value == "None"):
                 continue
-            self.bone_main.append(value)
+            bone_main.append(value)
 
         for row in csv_data[1:]:
             if len(row) <= simple_save_column:
@@ -90,7 +90,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
             value = str(row[simple_save_column])
             if (not value) or (value == "None"):
                 continue
-            self.bone_save.append(value)
+            bone_save.append(value)
 
         for row in csv_data[1:]:
             if len(row) <= max(simple_toactive_column, simple_active_column):
@@ -99,7 +99,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
             value = str(row[simple_active_column])
             if (not key) or (key == "None"):
                 continue
-            self.bone_mapping[key] = value
+            bone_mapping[key] = value
 
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = SourceArmature
@@ -108,7 +108,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
 
         # 创建主骨骼集合
         bpy.ops.pose.select_all(action='DESELECT')
-        for bone_name in self.bone_main:
+        for bone_name in bone_main:
             bone = SourceArmature.pose.bones.get(bone_name)
             if bone:
                 bone.bone.select = True
@@ -124,7 +124,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
 
         # 创建保留骨骼集合
         bpy.ops.pose.select_all(action='DESELECT')
-        for bone_name in self.bone_save:
+        for bone_name in bone_save:
             bone = SourceArmature.pose.bones.get(bone_name)
             if bone:
                 bone.bone.select = True
@@ -140,7 +140,7 @@ class O_BoneSimpleMapping(bpy.types.Operator):
 
         bpy.ops.pose.select_all(action='DESELECT')
         # 执行特定合并
-        for simple_toactive_name, simple_active_name in self.bone_mapping.items():
+        for simple_toactive_name, simple_active_name in bone_mapping.items():
             if simple_active_name == "":
                 continue
             SourceArmature.data.bones.active = SourceArmature.data.bones[simple_active_name]
@@ -148,9 +148,9 @@ class O_BoneSimpleMapping(bpy.types.Operator):
 
         # 剩余合并至父级
         bpy.ops.pose.select_all(action='DESELECT')
-        for bone in self.bone_main:
+        for bone in bone_main:
             bpy.ops.object.select_pattern(pattern=bone)
-        for bone in self.bone_save:
+        for bone in bone_save:
             bpy.ops.object.select_pattern(pattern=bone)
         bpy.ops.pose.select_all(action='INVERT') # 反选
         bpy.ops.xbone.merge_to_parent()
@@ -168,13 +168,11 @@ class O_BoneSimpleMapping(bpy.types.Operator):
 class O_BonePosMapping(bpy.types.Operator):
     bl_idname = "xbone.pos_mapping"
     bl_label = "复制位置"
-    bl_description = "将源骨骼按excel对应, 添加复制位置约束并应用约束、骨架、姿态"
-    # 获取要添加约束的源骨骼名称和目标骨骼名称的映射
-    bone_mapping = {}
-    
+    bl_description = "将源骨骼按csv对应, 添加复制位置约束并应用约束、骨架、姿态"
+
     def execute(self, context):
-        if not O_ImportCSV.csv_data:
-            self.report({'ERROR'}, "似乎没有导入excel")
+        if context.scene.xbone_csv_data == "":
+            self.report({'ERROR'}, "似乎没有导入csv")
             return {'FINISHED'}
         try:
             SourceArmature = bpy.data.objects.get(context.scene.source_armature.name)
@@ -183,9 +181,10 @@ class O_BonePosMapping(bpy.types.Operator):
             self.report({'ERROR'}, "似乎没有选择对象") 
             return {'FINISHED'}
         
-        csv_data = O_ImportCSV.csv_data
+        csv_data = json.loads(context.scene["xbone_csv_data"])
         key_column = context.scene.key_column
         value_column = context.scene.value_column
+        bone_mapping = {}
         # 读取CSV数据
         for row in csv_data[1:]:  # 跳过标题行
             if len(row) <= max(key_column, value_column):
@@ -194,10 +193,10 @@ class O_BonePosMapping(bpy.types.Operator):
             value = str(row[value_column])
             if (key == "None") or (value == "None"):
                 continue
-            self.bone_mapping[key] = value
+            bone_mapping[key] = value
 
         # 遍历源骨骼名称映射
-        for source_bone_name, target_bone_name in self.bone_mapping.items():
+        for source_bone_name, target_bone_name in bone_mapping.items():
             # 获取源骨骼和目标骨骼
             source_bone = SourceArmature.pose.bones.get(source_bone_name)
             target_bone = TargetArmature.pose.bones.get(target_bone_name)
@@ -229,16 +228,12 @@ class O_BonePosMapping(bpy.types.Operator):
 class O_BoneRenameMapping(bpy.types.Operator):
     bl_idname = "xbone.rename_mapping"
     bl_label = "重命名换绑"
-    bl_description = "将源骨架骨骼按excel对应, 重命名至目标骨架并绑定"
-    # 获取要添加约束的源骨骼名称和目标骨骼名称的映射
-    bone_mapping = {}
-    bone_save = []
-    bone_save_parent = {}
-    bone_target_save = []
+    bl_description = "将源骨架骨骼按csv对应, 重命名至目标骨架并绑定"
+
     
     def execute(self, context):
-        if not O_ImportCSV.csv_data:
-            self.report({'ERROR'}, "似乎没有导入excel")
+        if context.scene.xbone_csv_data == "":
+            self.report({'ERROR'}, "似乎没有导入csv")
             return {'FINISHED'}
         try:
             SourceMesh = bpy.data.objects.get(context.scene.rename_source_mesh.name)
@@ -248,11 +243,15 @@ class O_BoneRenameMapping(bpy.types.Operator):
             self.report({'ERROR'}, "似乎没有选择对象") 
             return {'FINISHED'}
         
-        csv_data = O_ImportCSV.csv_data
+        csv_data = json.loads(context.scene["xbone_csv_data"])
         rename_key_column = context.scene.rename_key_column
         rename_value_column = context.scene.rename_value_column
         rename_save_column = context.scene.rename_save_column
         rename_target_save_column = context.scene.rename_target_save_column
+        bone_mapping = {}
+        bone_save = []
+        bone_save_parent = {}
+        bone_target_save = []
         # 读取CSV文件中的数据
         for row in csv_data[1:]:  # 跳过标题行
             # 第一部分映射
@@ -261,21 +260,21 @@ class O_BoneRenameMapping(bpy.types.Operator):
                 value = str(row[rename_value_column])
                 if (key == "None") or (value == "None"):
                     continue
-                self.bone_mapping[key] = value
+                bone_mapping[key] = value
 
             # 第二部分保存列表
             if len(row) > rename_save_column:
                 value = str(row[rename_save_column])
                 if (not value) or (value == "None"):
                     continue
-                self.bone_save.append(value)
+                bone_save.append(value)
 
             # 第三部分目标保存列表
             if len(row) > rename_target_save_column:
                 value = str(row[rename_target_save_column])
                 if (not value) or (value == "None"):
                     continue
-                self.bone_target_save.append(value)
+                bone_target_save.append(value)
             
         # 应用两个骨架姿态
         bpy.context.view_layer.objects.active = SourceArmature
@@ -290,7 +289,7 @@ class O_BoneRenameMapping(bpy.types.Operator):
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = SourceArmature
         bpy.ops.object.mode_set(mode='POSE')
-        for source_bone_name, target_bone_name in self.bone_mapping.items():
+        for source_bone_name, target_bone_name in bone_mapping.items():
             #SourceArmature.data.bones.active = SourceArmature.data.bones[source_bone_name]
             #bpy.context.active_bone.name = target_bone_name
             try:
@@ -299,16 +298,16 @@ class O_BoneRenameMapping(bpy.types.Operator):
                 print(f"{source_bone_name}不存在")
 
         # 保留骨骼的父级记录
-        for bone in self.bone_save:
+        for bone in bone_save:
             SourceArmature.data.bones.active = SourceArmature.data.bones[bone]
             bpy.ops.pose.select_hierarchy(direction='PARENT', extend=True)
-            for bone_exist in self.bone_save:
+            for bone_exist in bone_save:
                 if context.active_pose_bone.name == bone_exist:
                     break
             else: # 遍历正常完成的最后执行
                 key = bone
                 value = context.active_pose_bone.name
-                self.bone_save_parent[key] = value
+                bone_save_parent[key] = value
 
         # 应用原骨架
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -332,7 +331,7 @@ class O_BoneRenameMapping(bpy.types.Operator):
         bpy.context.view_layer.objects.active = SourceArmature
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.armature.select_all(action='DESELECT')
-        for bone in self.bone_save:
+        for bone in bone_save:
             bpy.ops.object.select_pattern(pattern=bone)
         bpy.ops.armature.select_all(action='INVERT') # 反选
         bpy.ops.armature.delete()
@@ -354,8 +353,8 @@ class O_BoneRenameMapping(bpy.types.Operator):
         # 保留骨骼重新指定父级
         bpy.context.view_layer.objects.active = TargetArmature
         bpy.ops.object.mode_set(mode='EDIT')
-        print(self.bone_save_parent)
-        for bone_save_name, bone_parent_name in self.bone_save_parent.items():
+        print(bone_save_parent)
+        for bone_save_name, bone_parent_name in bone_save_parent.items():
             bpy.ops.armature.select_all(action='DESELECT') #取消选择
             bpy.ops.object.select_pattern(pattern=bone_save_name) #选择
             bpy.ops.object.select_pattern(pattern=bone_parent_name) #选择
@@ -369,7 +368,7 @@ class O_BoneRenameMapping(bpy.types.Operator):
         # 主骨骼集合
         bpy.ops.object.mode_set(mode='POSE')
         bpy.ops.pose.select_all(action='DESELECT')  # 取消选择
-        for source_bone_name, target_bone_name in self.bone_mapping.items():
+        for source_bone_name, target_bone_name in bone_mapping.items():
             bone = TargetArmature.pose.bones.get(target_bone_name)
             if bone:
                 bone.bone.select = True
@@ -385,7 +384,7 @@ class O_BoneRenameMapping(bpy.types.Operator):
         
         # 源保留骨骼集合
         bpy.ops.pose.select_all(action='DESELECT')
-        for bone_name in self.bone_save:
+        for bone_name in bone_save:
             bone = TargetArmature.pose.bones.get(bone_name)
             if bone:
                 bone.bone.select = True
@@ -401,7 +400,7 @@ class O_BoneRenameMapping(bpy.types.Operator):
         
         # 目标保留骨骼集合
         bpy.ops.pose.select_all(action='DESELECT')
-        for bone_name in self.bone_target_save:
+        for bone_name in bone_target_save:
             bone = TargetArmature.pose.bones.get(bone_name)
             if bone:
                 bone.bone.select = True
@@ -438,13 +437,11 @@ class O_BoneRenameMapping(bpy.types.Operator):
 class O_only_BoneRenameMapping(bpy.types.Operator):
     bl_idname = "xbone.only_rename_mapping"
     bl_label = "仅重命名"
-    bl_description = "将源骨架骨骼按excel对应, 重命名"
+    bl_description = "将源骨架骨骼按csv对应, 重命名"
 
-    bone_mapping = {}
- 
     def execute(self, context):
-        if not O_ImportCSV.csv_data:
-            self.report({'ERROR'}, "似乎没有导入excel")
+        if context.scene.xbone_csv_data == "":
+            self.report({'ERROR'}, "似乎没有导入csv")
             return {'FINISHED'}
         try:
             TargetArmature = bpy.data.objects.get(context.scene.rename_armature.name)
@@ -452,9 +449,10 @@ class O_only_BoneRenameMapping(bpy.types.Operator):
             self.report({'ERROR'}, "似乎没有选择对象") 
             return {'FINISHED'}
         
-        csv_data = O_ImportCSV.csv_data
+        csv_data = json.loads(context.scene["xbone_csv_data"])
         current_skel_column = context.scene.current_skel_column
         change_skel_column = context.scene.change_skel_column
+        bone_mapping = {}
         # 读取CSV文件中的数据
         for row in csv_data[1:]:  # 跳过标题行
             if len(row) <= max(current_skel_column, change_skel_column):
@@ -469,7 +467,7 @@ class O_only_BoneRenameMapping(bpy.types.Operator):
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = TargetArmature
         bpy.ops.object.mode_set(mode='POSE')
-        for current_bone_name, change_bone_name in self.bone_mapping.items():
+        for current_bone_name, change_bone_name in bone_mapping.items():
             try:
                 TargetArmature.data.bones[current_bone_name].name = change_bone_name
             except:
@@ -558,6 +556,12 @@ def register():
     bpy.utils.register_class(O_only_BoneRenameMapping)
     bpy.utils.register_class(P_BoneMapping)
     ########################## Divider ##########################
+    bpy.types.Scene.xbone_csv_data = bpy.props.StringProperty(
+        name="CSV Data",
+        description="Stores imported CSV data as JSON",
+        default=""
+    )
+
     bpy.types.Scene.simple_source_armature = bpy.props.PointerProperty(
         description="选择将被作用的骨架",
         type=bpy.types.Object, 
@@ -677,6 +681,8 @@ def unregister():
     bpy.utils.unregister_class(O_BoneRenameMapping)
     bpy.utils.unregister_class(O_only_BoneRenameMapping)    
     bpy.utils.unregister_class(P_BoneMapping)
+
+    del bpy.types.Scene.xbone_csv_data
 
     del bpy.types.Scene.simple_source_armature
     del bpy.types.Scene.source_armature
