@@ -325,14 +325,13 @@ class O_VertexGroupsMatchRename(bpy.types.Operator):
 
 class O_VertexGroupsSortMatch(bpy.types.Operator):
     bl_idname = "xbone.vertex_groups_sort_match"
-    bl_label = "匹配排序"
+    bl_label = "名称排序"
     bl_description = ("严格按照选择物体的顶点组顺序重新排列活动物体的顶点组\n"
                      "操作逻辑:\n"
                      "1. 按选择物体的顶点组顺序依次处理\n"
-                     "2. 将活动物体的对应顶点组移动到匹配位置\n"
-                     "3. 缺少的顶点组会新建空组\n"
-                     "4. 多余的顶点组会保留在最后\n"
-                     "我用来给解包的模型按提取的模型排序，方便导出时顺序正确")
+                     "2. 缺少的顶点组会新建空组\n"
+                     "3. 已有的顶点组会移动到对应位置\n"
+                     "4. 多余的顶点组会自动保留在最后")
 
     def execute(self, context):
         try:
@@ -355,18 +354,17 @@ class O_VertexGroupsSortMatch(bpy.types.Operator):
                 self.report({'ERROR'}, "两个物体都必须是网格类型")
                 return {'CANCELLED'}
                 
-            # 执行精确排序
-            result = self._reorder_vertex_groups(source_obj, target_obj)
+            # 执行排序
+            result = self._sort_vertex_groups(context, source_obj, target_obj)
             
             self.report({'INFO'}, 
                        f"排序完成: 匹配 {result['matched']}个, "
-                       f"新建 {result['added']}个, "
-                       f"保留 {result['kept']}个")
+                       f"新建 {result['added']}个")
             
-            # 打印详细结果到控制台
+            # 打印结果到控制台
             print(f"\n顶点组排序结果 [{target_obj.name} → {source_obj.name}]:")
             for i, vg in enumerate(target_obj.vertex_groups):
-                prefix = "  ✓ " if vg.name in [x.name for x in source_obj.vertex_groups] else "  ✕ "
+                prefix = "  ✓ " if vg.name in [x.name for x in source_obj.vertex_groups] else "  + "
                 print(f"{i+1:2d}.{prefix}{vg.name}")
             
             return {'FINISHED'}
@@ -375,68 +373,54 @@ class O_VertexGroupsSortMatch(bpy.types.Operator):
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
     
-    def _reorder_vertex_groups(self, source_obj, target_obj):
+    def _sort_vertex_groups(self, context, source_obj, target_obj):
         source_vgs = source_obj.vertex_groups
         target_vgs = target_obj.vertex_groups
         
-        # 备份目标物体所有顶点组权重数据
-        weight_backup = {}
-        for vg in target_vgs:
-            weight_backup[vg.name] = self._get_vertex_weights(target_obj, vg)
-        
-        # 记录已处理的顶点组
-        processed = set()
-        new_order = []
         added_count = 0
+        matched_count = 0
         
-        # 第一步：按源物体顺序处理
-        for src_vg in source_vgs:
+        # 保存当前活动顶点组索引
+        original_active_index = target_obj.vertex_groups.active_index
+        
+        # 遍历源物体顶点组顺序
+        for desired_index, src_vg in enumerate(source_vgs):
             if src_vg.name in target_vgs:
-                # 移动现有顶点组
-                new_order.append((src_vg.name, False))
-                processed.add(src_vg.name)
+                # 已有顶点组，移动到正确位置
+                current_index = target_vgs.find(src_vg.name)
+                
+                # 设置活动顶点组
+                target_obj.vertex_groups.active_index = current_index
+                
+                # 计算需要移动的次数
+                move_count = current_index - desired_index
+                
+                # 向上移动
+                for _ in range(move_count):
+                    bpy.ops.object.vertex_group_move(direction='UP')
+                
+                matched_count += 1
             else:
-                # 添加新顶点组
-                new_order.append((src_vg.name, True))
+                # 新建顶点组
+                new_vg = target_vgs.new(name=src_vg.name)
                 added_count += 1
+                
+                # 设置活动顶点组为新创建的组
+                target_obj.vertex_groups.active_index = len(target_vgs) - 1
+                
+                # 移动到正确位置
+                move_count = len(target_vgs) - 1 - desired_index
+                for _ in range(move_count):
+                    bpy.ops.object.vertex_group_move(direction='UP')
         
-        # 第二步：添加目标物体独有的顶点组
-        kept_count = 0
-        for tgt_vg in target_vgs:
-            if tgt_vg.name not in processed:
-                new_order.append((tgt_vg.name, False))
-                kept_count += 1
-        
-        # 重建顶点组列表
-        target_vgs.clear()
-        
-        # 按新顺序创建顶点组并恢复权重
-        for name, is_new in new_order:
-            vg = target_vgs.new(name=name)
-            if not is_new and name in weight_backup:
-                for v_idx, weight in weight_backup[name].items():
-                    vg.add([v_idx], weight, 'REPLACE')
+        # 恢复原始活动顶点组
+        if original_active_index < len(target_vgs):
+            target_obj.vertex_groups.active_index = original_active_index
         
         return {
-            'matched': len(source_vgs) - added_count,
-            'added': added_count,
-            'kept': kept_count
+            'matched': matched_count,
+            'added': added_count
         }
-    
-    def _get_vertex_weights(self, obj, vg):
-        """获取顶点组中所有顶点的权重"""
-        weights = {}
-        mesh = obj.data
-        
-        for v in mesh.vertices:
-            try:
-                weight = vg.weight(v.index)
-                if weight > 0:
-                    weights[v.index] = weight
-            except RuntimeError:
-                pass
-                
-        return weights
 
 def register():
     bpy.utils.register_class(DATA_PT_vertex_group_tools)

@@ -24,10 +24,13 @@ class DATA_PT_shape_key_tools(bpy.types.Panel):
         row = col.row(align=True)
         row.prop(context.scene, "shape_key_similarity_threshold")
         row.operator(O_ShapeKeysMatchRename.bl_idname, text=O_ShapeKeysMatchRename.bl_label, icon="SORTBYEXT")
+        row.separator()
+        row.operator(O_ShapeKeysSortMatch.bl_idname, text=O_ShapeKeysSortMatch.bl_label, icon="SORTSIZE")
+        row.operator(O_ShapeKeysRenameByOrder.bl_idname, text=O_ShapeKeysRenameByOrder.bl_label, icon="SORTALPHA")
 
 class O_ShapeKeysMatchRename(bpy.types.Operator):
     bl_idname = "xbone.shape_keys_match_rename"
-    bl_label = "匹配重命名形态键"
+    bl_label = "匹配重命名"
     bl_description = ("基于顶点平均位置匹配重命名活动物体的形态键（需选择2个网格物体）\n"
                      "用于按参考模型的形态键名称重命名当前模型的形态键")
     
@@ -200,10 +203,246 @@ class O_ShapeKeysMatchRename(bpy.types.Operator):
         print(f"  总重命名数量: {result['renamed_count']}")
         print(separator)
 
+class O_ShapeKeysSortMatch(bpy.types.Operator):
+    bl_idname = "xbone.shape_keys_sort_match"
+    bl_label = "名称排序"
+    bl_description = ("严格按照选择物体的形态键顺序重新排列活动物体的形态键\n"
+                    "操作逻辑:\n"
+                    "1. 按选择物体的形态键顺序依次处理\n"
+                    "2. 缺少的形态键会新建空键\n"
+                    "3. 已有的形态键会移动到对应位置\n"
+                    "4. 多余的形态键会保留在最后")
+
+    def execute(self, context):
+        try:
+            selected_objs = context.selected_objects
+            active_obj = context.active_object
+            
+            # 验证选择
+            if len(selected_objs) != 2:
+                self.report({'ERROR'}, "请选择2个网格物体")
+                return {'CANCELLED'}
+                
+            if active_obj not in selected_objs:
+                self.report({'ERROR'}, "活动物体必须是选中的物体之一")
+                return {'CANCELLED'}
+                
+            source_obj = next(obj for obj in selected_objs if obj != active_obj)
+            target_obj = active_obj
+
+            if source_obj.type != 'MESH' or target_obj.type != 'MESH':
+                self.report({'ERROR'}, "两个物体都必须是网格类型")
+                return {'CANCELLED'}
+                
+            if not source_obj.data.shape_keys:
+                self.report({'ERROR'}, "源物体必须有形态键")
+                return {'CANCELLED'}
+                
+            # 执行精确排序
+            result = self._reorder_shape_keys_exact(source_obj, target_obj)
+            
+            self.report({'INFO'}, 
+                       f"排序完成: 匹配 {result['matched']}个, "
+                       f"添加 {result['added']}个, "
+                       f"保留 {result['kept']}个")
+            
+            # 打印详细结果到控制台
+            print(f"\n形态键排序结果 [{target_obj.name} → {source_obj.name}]:")
+            for i, sk in enumerate(target_obj.data.shape_keys.key_blocks):
+                prefix = "  ✓ " if sk.name in [x.name for x in source_obj.data.shape_keys.key_blocks] else "  + " if sk.name not in result['original_keys'] else "  ✕ "
+                print(f"{i+1:2d}.{prefix}{sk.name}")
+            
+            return {'FINISHED'}
+            
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+    
+    def _reorder_shape_keys_exact(self, source_obj, target_obj):
+        source_sks = source_obj.data.shape_keys.key_blocks
+        target_sks = target_obj.data.shape_keys.key_blocks if target_obj.data.shape_keys else None
+        
+        # 记录目标物体原有的形态键名称
+        original_keys = set()
+        if target_sks:
+            original_keys = {sk.name for sk in target_sks}
+        
+        # 确保目标物体有形态键
+        if not target_sks:
+            target_obj.shape_key_add(name="Basis", from_mix=False)
+            target_sks = target_obj.data.shape_keys.key_blocks
+        
+        # 我们需要知道每个形态键应该移动到的位置
+        desired_order = []
+        added_count = 0
+        matched_count = 0
+        
+        # 首先处理基础形态键
+        basis_sk = target_sks.get("Basis")
+        if not basis_sk:
+            basis_sk = target_sks[0] if len(target_sks) > 0 else target_obj.shape_key_add(name="Basis", from_mix=False)
+        
+        # 确保基础形态键在第一位
+        if basis_sk != target_sks[0]:
+            target_obj.active_shape_key_index = basis_sk.index
+            for _ in range(basis_sk.index):
+                bpy.ops.object.shape_key_move(type='UP')
+        
+        # 遍历源物体的形态键顺序
+        for src_sk in source_sks:
+            if src_sk.name == "Basis":
+                continue  # 基础形态键已经在第一位
+            
+            # 检查目标物体是否有该形态键
+            if src_sk.name in target_sks:
+                # 已有形态键，记录需要移动到的位置
+                desired_order.append(src_sk.name)
+                matched_count += 1
+            else:
+                # 没有该形态键，添加一个新的空形态键
+                new_sk = target_obj.shape_key_add(name=src_sk.name, from_mix=False)
+                desired_order.append(new_sk.name)
+                added_count += 1
+        
+        # 添加目标物体独有的形态键到末尾
+        kept_count = 0
+        for tgt_sk in target_sks:
+            if tgt_sk.name not in desired_order and tgt_sk.name != "Basis":
+                desired_order.append(tgt_sk.name)
+                kept_count += 1
+        
+        # 现在按照desired_order重新排列形态键
+        # 由于Blender没有直接重排API，我们需要通过移动来实现
+        for desired_index, sk_name in enumerate(desired_order):
+            if desired_index == 0:
+                continue  # 基础形态键已经在第一位
+            
+            current_index = target_sks.find(sk_name)
+            if current_index == -1:
+                continue  # 不应该发生
+            
+            # 计算需要移动的次数
+            move_count = current_index - desired_index
+            if move_count <= 0:
+                continue  # 已经在正确位置或更靠前
+            
+            # 移动形态键到正确位置
+            target_obj.active_shape_key_index = current_index
+            for _ in range(move_count):
+                bpy.ops.object.shape_key_move(type='UP')
+        
+        return {
+            'matched': matched_count,
+            'added': added_count,
+            'kept': kept_count,
+            'original_keys': original_keys
+        }
+    
+class O_ShapeKeysRenameByOrder(bpy.types.Operator):
+    bl_idname = "xbone.shape_keys_rename_by_order"
+    bl_label = "顺序重命名"
+    bl_description = ("按照选择物体A的形态键顺序重命名活动物体B的形态键名称\n"
+                     "操作逻辑:\n"
+                     "1. 跳过基础形态键('Basis')\n"
+                     "2. 按顺序将B物体的形态键重命名为A物体的形态键名称\n"
+                     "3. 如果B物体的形态键比A物体多，多余的保留原名\n"
+                     "示例:\n"
+                     "A物体: ['Basis','TT','XX','YY']\n"
+                     "B物体: ['Basis','1','2','3','4']\n"
+                     "结果: ['Basis','TT','XX','YY','4']")
+
+    def execute(self, context):
+        try:
+            selected_objs = context.selected_objects
+            active_obj = context.active_object
+            
+            # 验证选择
+            if len(selected_objs) != 2:
+                self.report({'ERROR'}, "请选择2个网格物体")
+                return {'CANCELLED'}
+                
+            if active_obj not in selected_objs:
+                self.report({'ERROR'}, "活动物体必须是选中的物体之一")
+                return {'CANCELLED'}
+                
+            source_obj = next(obj for obj in selected_objs if obj != active_obj)
+            target_obj = active_obj
+
+            if source_obj.type != 'MESH' or target_obj.type != 'MESH':
+                self.report({'ERROR'}, "两个物体都必须是网格类型")
+                return {'CANCELLED'}
+                
+            if not source_obj.data.shape_keys:
+                self.report({'ERROR'}, "源物体必须有形态键")
+                return {'CANCELLED'}
+                
+            if not target_obj.data.shape_keys:
+                self.report({'ERROR'}, "目标物体必须有形态键")
+                return {'CANCELLED'}
+                
+            # 执行顺序重命名
+            result = self._rename_shape_keys_by_order(source_obj, target_obj)
+            
+            self.report({'INFO'}, 
+                       f"重命名完成: 已重命名 {result['renamed']}个, "
+                       f"保留 {result['kept']}个")
+            
+            # 打印详细结果到控制台
+            print(f"\n形态键顺序重命名结果 [{target_obj.name} → {source_obj.name}]:")
+            source_names = [sk.name for sk in source_obj.data.shape_keys.key_blocks]
+            for i, sk in enumerate(target_obj.data.shape_keys.key_blocks):
+                if i == 0:
+                    print(f"{i+1:2d}.   {sk.name} (Basis)")
+                elif i-1 < len(source_names)-1:
+                    renamed = sk.name in source_names
+                    prefix = "  ✓ " if renamed else "  ✕ "
+                    print(f"{i+1:2d}.{prefix}{sk.name}")
+                else:
+                    print(f"{i+1:2d}.  ✕ {sk.name} (保留)")
+            
+            return {'FINISHED'}
+            
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+    
+    def _rename_shape_keys_by_order(self, source_obj, target_obj):
+        source_sks = source_obj.data.shape_keys.key_blocks
+        target_sks = target_obj.data.shape_keys.key_blocks
+        
+        renamed_count = 0
+        kept_count = 0
+        
+        # 跳过基础形态键
+        source_index = 1  # 从第二个形态键开始
+        target_index = 1
+        
+        # 遍历目标物体的形态键(跳过基础形态键)
+        while target_index < len(target_sks) and source_index < len(source_sks):
+            target_sk = target_sks[target_index]
+            source_name = source_sks[source_index].name
+            
+            # 重命名目标形态键
+            target_sk.name = source_name
+            renamed_count += 1
+            
+            source_index += 1
+            target_index += 1
+        
+        # 计算保留的形态键数量
+        kept_count = max(0, len(target_sks) - source_index)
+        
+        return {
+            'renamed': renamed_count,
+            'kept': kept_count
+        }
+
 
 def register():
     bpy.utils.register_class(DATA_PT_shape_key_tools)
     bpy.utils.register_class(O_ShapeKeysMatchRename)
+    bpy.utils.register_class(O_ShapeKeysSortMatch)
+    bpy.utils.register_class(O_ShapeKeysRenameByOrder)
 
     bpy.types.Scene.shape_key_similarity_threshold = bpy.props.FloatProperty(
         name="形态键相似度阈值",
@@ -218,5 +457,7 @@ def register():
 def unregister():
     bpy.utils.unregister_class(DATA_PT_shape_key_tools)
     bpy.utils.unregister_class(O_ShapeKeysMatchRename)
+    bpy.utils.unregister_class(O_ShapeKeysSortMatch)
+    bpy.utils.unregister_class(O_ShapeKeysRenameByOrder)
 
     del bpy.types.Scene.shape_key_similarity_threshold
