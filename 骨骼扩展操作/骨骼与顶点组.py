@@ -228,9 +228,6 @@ class O_RemoveBoneNumber(bpy.types.Operator):
 
 ########################## Divider ##########################
 
-import bpy
-from bpy.props import StringProperty
-from bpy.types import Operator, Panel
 
 def get_armature_objects(context):
     """获取场景中所有受骨骼绑定的物体"""
@@ -275,7 +272,7 @@ def merge_vertex_groups(obj, source_bone, target_bone):
         except Exception as e:
             print(f"Error merging vertex groups for {obj.name}: {e}")
 
-class BONE_OT_merge_to_parent(Operator):
+class BONE_OT_merge_to_parent(bpy.types.Operator):
     """将选择的骨骼合并到它们的父级骨骼"""
     bl_idname = "xbone.merge_to_parent"
     bl_label = "将选择骨骼合并到父级"
@@ -337,7 +334,7 @@ class BONE_OT_merge_to_parent(Operator):
         
         return {'FINISHED'}
 
-class BONE_OT_merge_to_active(Operator):
+class BONE_OT_merge_to_active(bpy.types.Operator):
     """将选择的骨骼合并到活动骨骼"""
     bl_idname = "xbone.merge_to_active"
     bl_label = "将选择骨骼合并到活动骨骼"

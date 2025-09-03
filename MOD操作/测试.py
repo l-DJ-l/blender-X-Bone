@@ -1,6 +1,8 @@
 # type: ignore
 import bpy
 import random
+from bpy.props import IntProperty
+from bpy.types import Operator, Panel
 
 class ObjType(bpy.types.Operator):
     def is_mesh(scene, obj):
@@ -38,6 +40,8 @@ class P_DEMO(bpy.types.Panel):
             else:
                 col.label(text="错误: 物体没有骨架修改器", icon='ERROR')
         col.operator(ApplyAsShapekey.bl_idname, icon="SHAPEKEY_DATA")
+
+
 
 
 class MiniPlaneOperator(bpy.types.Operator):
@@ -222,6 +226,95 @@ class ApplyAsShapekey(bpy.types.Operator):
         
         return {'FINISHED'}
     
+class NODE_OT_add_packed_image(Operator):
+    """创建已打包图像"""
+    bl_idname = "xbone.add_packed_image"
+    bl_label = "创建已打包图像"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # 添加分辨率属性
+    width: IntProperty(
+        name="宽度",
+        description="图像的宽度",
+        default=2048,
+        min=1,
+        max=16384
+    )
+    
+    height: IntProperty(
+        name="高度",
+        description="图像的高度",
+        default=2048,
+        min=1,
+        max=16384
+    )
+
+    def execute(self, context):
+        # 检查是否有活动对象和材质
+        if not context.active_object or not context.active_object.active_material:
+            self.report({'ERROR'}, "请先选择带有材质的对象")
+            return {'CANCELLED'}
+        
+        mat = context.active_object.active_material
+        nodes = mat.node_tree.nodes
+        
+        # 创建新图像
+        image_name = "已打包图像"
+            
+        image = bpy.data.images.new(
+            name=image_name,
+            width=self.width,
+            height=self.height,
+            alpha=True,
+            float_buffer=False,
+            is_data=False,
+            tiled=False
+        )
+        
+        # 获取鼠标位置
+        mouse_x = context.space_data.cursor_location[0]
+        mouse_y = context.space_data.cursor_location[1]
+        
+        # 创建图像纹理节点并放置在鼠标位置
+        tex_node = nodes.new('ShaderNodeTexImage')
+        tex_node.image = image
+        tex_node.location = (mouse_x, mouse_y)
+        
+        # 修改第一个像素点为白色（RGBA=1,1,1,1）确保被修改能够打包
+        pixels = list(image.pixels)
+        pixels[0] = 1.0  # R
+        pixels[1] = 1.0  # G
+        pixels[2] = 1.0  # B
+        pixels[3] = 1.0  # A
+        image.pixels = pixels
+        
+        # 更新图像
+        image.update()
+        
+        # 打包图像到.blend文件
+        image.pack()
+        
+        self.report({'INFO'}, f"已创建打包图像纹理 {self.width}x{self.height}")
+        return {'FINISHED'}
+    
+    def invoke(self, context, event):
+        # 设置鼠标位置
+        context.space_data.cursor_location_from_region(event.mouse_region_x, event.mouse_region_y)
+        # 弹出对话框让用户设置分辨率
+        return context.window_manager.invoke_props_dialog(self)
+
+
+class NODE_PT_inverted_texture_panel(Panel):
+    """在节点编辑器侧边栏中添加面板"""
+    bl_label = "图像"
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "XBone"
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.operator(NODE_OT_add_packed_image.bl_idname)
+
 
 def register():
     bpy.utils.register_class(P_DEMO)
@@ -233,6 +326,11 @@ def register():
         type=bpy.types.Object, 
         poll=ObjType.is_mesh
         )
+    
+    bpy.utils.register_class(NODE_OT_add_packed_image)
+    bpy.utils.register_class(NODE_PT_inverted_texture_panel)
+
+
 
 def unregister():
     bpy.utils.unregister_class(P_DEMO)
@@ -240,3 +338,10 @@ def unregister():
     bpy.utils.unregister_class(RenameToComponents)
     bpy.utils.unregister_class(ApplyAsShapekey)
     del bpy.types.Scene.sk_source_mesh
+
+    bpy.utils.unregister_class(NODE_OT_add_packed_image)
+    bpy.utils.unregister_class(NODE_PT_inverted_texture_panel)
+
+
+
+

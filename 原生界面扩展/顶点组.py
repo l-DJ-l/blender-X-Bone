@@ -422,6 +422,7 @@ class O_VertexGroupsSortMatch(bpy.types.Operator):
             'added': added_count
         }
 
+
 def register():
     bpy.utils.register_class(DATA_PT_vertex_group_tools)
     bpy.utils.register_class(O_VertexGroupsCount)
