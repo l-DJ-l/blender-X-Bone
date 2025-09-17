@@ -304,7 +304,7 @@ class NODE_OT_add_packed_image(Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-class NODE_PT_inverted_texture_panel(Panel):
+class NODE_PT_add_packed_image(Panel):
     """在节点编辑器侧边栏中添加面板"""
     bl_label = "图像"
     bl_space_type = 'NODE_EDITOR'
@@ -314,6 +314,149 @@ class NODE_PT_inverted_texture_panel(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator(NODE_OT_add_packed_image.bl_idname)
+
+
+class NODE_OT_add_material(Operator):
+    bl_idname = "xbone.add_material"
+    bl_label = "新建3贴图材质"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # 分辨率属性
+    width: IntProperty(
+        name="宽度",
+        description="图像的宽度",
+        default=2048,
+        min=1,
+        max=16384
+    )
+    
+    height: IntProperty(
+        name="高度",
+        description="图像的高度",
+        default=2048,
+        min=1,
+        max=16384
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj:
+            self.report({'ERROR'}, "请先选择对象")
+            return {'CANCELLED'}
+        
+        # 获取或创建材质
+        mat = obj.active_material
+        if not mat:
+            mat = bpy.data.materials.new(name=obj.name)
+            obj.data.materials.append(mat)
+        
+        # 确保使用节点
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+        
+        # 查找原理化BSDF节点
+        bsdf = next((node for node in nodes if node.type == 'BSDF_PRINCIPLED'), None)
+        if not bsdf:
+            bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+            bsdf.location = (0, 0)
+        
+        # 创建三张图像纹理
+        base_color_name = f"{obj.name}基础色"
+        metallic_name = f"{obj.name}金属度"
+        roughness_name = f"{obj.name}糙度"
+        
+        # 基于BSDF节点位置布局
+        bsdf_x, bsdf_y = bsdf.location
+        offset_x = -400  # 纹理节点在BSDF左侧
+        
+        # 创建基础色纹理
+        base_color_image = bpy.data.images.new(
+            name=base_color_name,
+            width=self.width,
+            height=self.height,
+            alpha=True,
+            float_buffer=False,
+            is_data=False,
+            tiled=False
+        )
+        self.set_default_pixels(base_color_image, (0.8, 0.8, 0.8, 1.0))
+        base_color_node = self.create_image_node(
+            nodes, base_color_image, 
+            (bsdf_x + offset_x, bsdf_y + 300)
+        )
+        links.new(base_color_node.outputs['Color'], bsdf.inputs['Base Color'])
+        
+        # 创建金属度纹理
+        metallic_image = bpy.data.images.new(
+            name=metallic_name,
+            width=self.width,
+            height=self.height,
+            alpha=False,
+            float_buffer=False,
+            is_data=True,
+            tiled=False
+        )
+        self.set_default_pixels(metallic_image, (0.0, 0.0, 0.0, 1.0))
+        metallic_node = self.create_image_node(
+            nodes, metallic_image, 
+            (bsdf_x + offset_x, bsdf_y)
+        )
+        links.new(metallic_node.outputs['Color'], bsdf.inputs['Metallic'])
+        
+        # 创建糙度纹理
+        roughness_image = bpy.data.images.new(
+            name=roughness_name,
+            width=self.width,
+            height=self.height,
+            alpha=False,
+            float_buffer=False,
+            is_data=True,
+            tiled=False
+        )
+        self.set_default_pixels(roughness_image, (0.5, 0.5, 0.5, 1.0))
+        roughness_node = self.create_image_node(
+            nodes, roughness_image, 
+            (bsdf_x + offset_x, bsdf_y - 300)
+        )
+        links.new(roughness_node.outputs['Color'], bsdf.inputs['Roughness'])
+        
+        self.report({'INFO'}, f"已创建材质 {self.width}x{self.height}")
+        return {'FINISHED'}
+    
+    def set_default_pixels(self, image, color):
+        """设置图像的默认像素颜色"""
+        pixels = [color[0], color[1], color[2], color[3]] * (image.size[0] * image.size[1])
+        image.pixels = pixels
+        image.update()
+        image.pack()
+    
+    def create_image_node(self, nodes, image, location):
+        """创建图像纹理节点"""
+        tex_node = nodes.new('ShaderNodeTexImage')
+        tex_node.image = image
+        tex_node.location = location
+        return tex_node
+    
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+class NODE_PT_add_material(Panel):
+    """在材质属性中创建面板"""
+    bl_label = "材质工具"
+    bl_idname = "NODE_PT_add_material"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "material"
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        
+        if obj:
+            row = layout.row()
+            row.operator(NODE_OT_add_material.bl_idname)
+
 
 
 def register():
@@ -328,8 +471,10 @@ def register():
         )
     
     bpy.utils.register_class(NODE_OT_add_packed_image)
-    bpy.utils.register_class(NODE_PT_inverted_texture_panel)
+    bpy.utils.register_class(NODE_PT_add_packed_image)
 
+    bpy.utils.register_class(NODE_OT_add_material)
+    bpy.utils.register_class(NODE_PT_add_material)
 
 
 def unregister():
@@ -340,8 +485,9 @@ def unregister():
     del bpy.types.Scene.sk_source_mesh
 
     bpy.utils.unregister_class(NODE_OT_add_packed_image)
-    bpy.utils.unregister_class(NODE_PT_inverted_texture_panel)
+    bpy.utils.unregister_class(NODE_PT_add_packed_image)
 
-
+    bpy.utils.unregister_class(NODE_OT_add_material)
+    bpy.utils.unregister_class(NODE_PT_add_material)
 
 

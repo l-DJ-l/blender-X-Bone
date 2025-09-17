@@ -45,6 +45,12 @@ class DATA_PT_color_attribute_tools(bpy.types.Panel):
         row.prop(scene, "color_attr_add_count", text="数量")
         row.operator(O_AddRenameColorAttributes.bl_idname, text="添加并重命名", icon='ADD')
         
+        # 添加顶点色层操作按钮
+        row = col.row(align=True)
+        row.prop(scene, "color_attr_target_index", text="索引")
+        row.operator(O_SetActiveColorAttributes.bl_idname, text="设置活动", icon="RESTRICT_SELECT_OFF")
+        row.operator(O_SetRenderColorAttributes.bl_idname, text="设置渲染", icon="RESTRICT_RENDER_OFF")
+        row.operator(O_RemoveColorAttributes.bl_idname, text="删除", icon="TRASH")
         
 
         # 添加颜色按钮
@@ -117,6 +123,112 @@ class O_AddRenameColorAttributes(bpy.types.Operator):
                    f"处理完成: {processed_objects}个物体, 添加{added_attrs}个, 重命名{renamed_attrs}个")
         return {'FINISHED'}
 
+class O_SetActiveColorAttributes(bpy.types.Operator):
+    bl_idname = "xmod.color_attr_set_active"
+    bl_label = "设置活动"
+    bl_description = "将所有选中物体的活动顶点色层设置为指定索引"
+    
+    def execute(self, context):
+        scene = context.scene
+        target_index = scene.color_attr_target_index
+        
+        processed_objects = 0
+        set_active_count = 0
+        
+        for obj in context.selected_objects:
+            if obj.type != 'MESH':
+                continue
+                
+            processed_objects += 1
+            # 获取顶点色层列表
+            vertex_colors = obj.data.vertex_colors
+            
+            if target_index < 0 or target_index >= len(vertex_colors):
+                self.report({'WARNING'}, f"物体 {obj.name} 的顶点色索引 {target_index} 超出范围")
+                continue
+                
+            vertex_colors.active = vertex_colors[target_index]
+            set_active_count += 1
+        
+        self.report({'INFO'}, 
+                   f"处理完成: {processed_objects}个物体, 设置了{set_active_count}个活动顶点色层")
+        return {'FINISHED'}
+
+class O_SetRenderColorAttributes(bpy.types.Operator):
+    bl_idname = "xmod.color_attr_set_render"
+    bl_label = "设置渲染"
+    bl_description = "将所有选中物体的渲染顶点色层设置为指定索引"
+    
+    def execute(self, context):
+        scene = context.scene
+        target_index = scene.color_attr_target_index
+        
+        processed_objects = 0
+        set_render_count = 0
+        
+        for obj in context.selected_objects:
+            if obj.type != 'MESH':
+                continue
+                
+            processed_objects += 1
+            vertex_colors = obj.data.vertex_colors
+            
+            if target_index < 0 or target_index >= len(vertex_colors):
+                self.report({'WARNING'}, f"物体 {obj.name} 的顶点色索引 {target_index} 超出范围")
+                continue
+                
+            # 设置指定索引的顶点色层为渲染层
+            vertex_colors[target_index].active_render = True
+            # 确保其他顶点色层不激活渲染
+            for i, vcol in enumerate(vertex_colors):
+                if i != target_index:
+                    vcol.active_render = False
+            set_render_count += 1
+        
+        self.report({'INFO'}, 
+                   f"处理完成: {processed_objects}个物体, 设置了{set_render_count}个渲染顶点色层")
+        return {'FINISHED'}
+
+class O_RemoveColorAttributes(bpy.types.Operator):
+    bl_idname = "xmod.color_attr_remove"
+    bl_label = "删除"
+    bl_description = "删除指定索引的顶点色层"
+    
+    def execute(self, context):
+        scene = context.scene
+        target_index = scene.color_attr_target_index
+        
+        processed_objects = 0
+        removed_colors = 0
+        
+        for obj in context.selected_objects:
+            if obj.type != 'MESH':
+                continue
+                
+            processed_objects += 1
+            vertex_colors = obj.data.vertex_colors
+            
+            if target_index < 0 or target_index >= len(vertex_colors):
+                self.report({'WARNING'}, f"物体 {obj.name} 的顶点色索引 {target_index} 超出范围")
+                continue
+                
+            # 删除指定索引的顶点色层
+            color_to_remove = vertex_colors[target_index]
+            vertex_colors.remove(color_to_remove)
+            removed_colors += 1
+            
+            # 确保活动顶点色层有效
+            if len(vertex_colors) > 0:
+                if vertex_colors.active is None:
+                    vertex_colors.active = vertex_colors[0]
+                # 确保至少有一个渲染顶点色层
+                if not any(vcol.active_render for vcol in vertex_colors):
+                    vertex_colors[0].active_render = True
+        
+        self.report({'INFO'}, 
+                   f"处理完成: {processed_objects}个物体, 删除了{removed_colors}个顶点色层")
+        return {'FINISHED'}
+
 
 # 调色板操作
 class O_AddColor(bpy.types.Operator):
@@ -147,23 +259,13 @@ class O_RemoveColor(bpy.types.Operator):
 class O_ApplyColor(bpy.types.Operator):
     bl_idname = "xmod.color_attr_apply_color"
     bl_label = "应用颜色"
-    bl_description = "将颜色应用到当前活动的顶点色层"
+    bl_description = "将颜色应用到所有选中物体的活动顶点色层"
     
     color_index: IntProperty()
     
     def execute(self, context):
         scene = context.scene
-        obj = context.object
         
-        # 基础检查
-        if not obj:
-            self.report({'ERROR'}, "未选中任何物体")
-            return {'CANCELLED'}
-            
-        if obj.type != 'MESH':
-            self.report({'ERROR'}, "所选对象不是网格类型")
-            return {'CANCELLED'}
-            
         if self.color_index >= len(scene.palette_colors):
             self.report({'ERROR'}, "调色板颜色索引无效")
             return {'CANCELLED'}
@@ -172,48 +274,63 @@ class O_ApplyColor(bpy.types.Operator):
         color_item = scene.palette_colors[self.color_index]
         color = color_item.color
         
-        # 检查顶点色层
-        mesh = obj.data
-        if not mesh.vertex_colors:
-            self.report({'ERROR'}, "该网格没有顶点色层")
-            return {'CANCELLED'}
+        processed_objects = 0
+        applied_count = 0
+        
+        # 遍历所有选中的物体
+        for obj in context.selected_objects:
+            if obj.type != 'MESH':
+                continue
+                
+            processed_objects += 1
             
-        if not mesh.vertex_colors.active:
-            self.report({'ERROR'}, "没有激活的顶点色层")
-            return {'CANCELLED'}
-        
-        # 使用bmesh高效修改
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        
-        # 获取激活的顶点色层
-        color_layer = mesh.vertex_colors.active
-        color_layer_bm = bm.loops.layers.color.get(color_layer.name)
-        
-        if not color_layer_bm:
+            # 检查顶点色层
+            mesh = obj.data
+            if not mesh.vertex_colors:
+                self.report({'WARNING'}, f"物体 {obj.name} 没有顶点色层")
+                continue
+                
+            if not mesh.vertex_colors.active:
+                self.report({'WARNING'}, f"物体 {obj.name} 没有激活的顶点色层")
+                continue
+            
+            # 使用bmesh高效修改
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            
+            # 获取激活的顶点色层
+            color_layer = mesh.vertex_colors.active
+            color_layer_bm = bm.loops.layers.color.get(color_layer.name)
+            
+            if not color_layer_bm:
+                bm.free()
+                self.report({'WARNING'}, f"无法访问物体 {obj.name} 的顶点色层数据")
+                continue
+            
+            # 应用颜色到所有顶点
+            for face in bm.faces:
+                for loop in face.loops:
+                    loop[color_layer_bm] = color
+            
+            # 更新网格
+            bm.to_mesh(mesh)
             bm.free()
-            self.report({'ERROR'}, "无法访问顶点色层数据")
-            return {'CANCELLED'}
+            applied_count += 1
         
-        # 应用颜色到所有顶点
-        for face in bm.faces:
-            for loop in face.loops:
-                loop[color_layer_bm] = color
-        
-        # 更新网格
-        bm.to_mesh(mesh)
-        bm.free()
-
         # 更新依赖图（确保所有相关数据更新）
         bpy.context.view_layer.update()
         
-        self.report({'INFO'}, f"颜色 '{color_item.name}' 应用到顶点色层 '{color_layer.name}'")
+        self.report({'INFO'}, 
+                   f"颜色 '{color_item.name}' 应用到 {applied_count}/{processed_objects} 个物体的活动顶点色层")
         return {'FINISHED'}
 
 def register():
     bpy.utils.register_class(PaletteColorItem)
     bpy.utils.register_class(DATA_PT_color_attribute_tools)
     bpy.utils.register_class(O_AddRenameColorAttributes)
+    bpy.utils.register_class(O_SetActiveColorAttributes)
+    bpy.utils.register_class(O_SetRenderColorAttributes)
+    bpy.utils.register_class(O_RemoveColorAttributes)
     bpy.utils.register_class(O_AddColor)
     bpy.utils.register_class(O_RemoveColor)
     bpy.utils.register_class(O_ApplyColor)
@@ -225,6 +342,14 @@ def register():
         default=1,
         min=1,
         max=32
+    )
+
+    bpy.types.Scene.color_attr_target_index = IntProperty(
+        name="目标顶点色索引",
+        description="要设置的活动/渲染顶点色的索引",
+        default=0,
+        min=0,
+        max=31
     )
     
     bpy.types.Scene.palette_colors = CollectionProperty(
@@ -255,9 +380,13 @@ def unregister():
     bpy.utils.unregister_class(PaletteColorItem)
     bpy.utils.unregister_class(DATA_PT_color_attribute_tools)
     bpy.utils.unregister_class(O_AddRenameColorAttributes)
+    bpy.utils.unregister_class(O_SetActiveColorAttributes)
+    bpy.utils.unregister_class(O_SetRenderColorAttributes)
+    bpy.utils.unregister_class(O_RemoveColorAttributes)
     bpy.utils.unregister_class(O_AddColor)
     bpy.utils.unregister_class(O_RemoveColor)
     bpy.utils.unregister_class(O_ApplyColor)
     
     del bpy.types.Scene.color_attr_add_count
+    del bpy.types.Scene.color_attr_target_index
     del bpy.types.Scene.palette_colors
