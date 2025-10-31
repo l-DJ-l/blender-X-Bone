@@ -5,22 +5,24 @@ import time
 from typing import Dict, Tuple, Set, List, Optional
 
 class DATA_PT_vertex_group_tools(bpy.types.Panel):
-    bl_label = "顶点组扩展操作"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "data"
-    bl_parent_id = "DATA_PT_vertex_groups"  # 设置为顶点组面板的ID
-    bl_options = {'HIDE_HEADER'}  # 隐藏标题栏
+    bl_label = "顶点组"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'XBone'
 
     @classmethod
     def poll(cls, context):
-        return (context.object is not None and 
-                context.object.type in {'MESH', 'LATTICE', 'CURVE', 'SURFACE'})
+        # 只有当主面板激活了此子面板时才显示
+        return context.scene.active_xbone_subpanel == 'AttributeTools'
 
     def draw(self, context):
         layout = self.layout
 
         obj = context.object
+        # 添加安全检查，确保物体存在且是网格物体
+        if obj is None or obj.type != 'MESH':
+            layout.label(text="请选择一个网格物体")
+            return
         count0 = len(obj.vertex_groups)
         
         # 获取存储的统计信息，如果没有则显示默认值
@@ -431,7 +433,7 @@ def register():
     bpy.utils.register_class(O_VertexGroupsSortMatch)
 
     bpy.types.Scene.similarity_threshold = bpy.props.FloatProperty(
-        name="相似度阈值",
+        name="顶点组相似度阈值",
         description="匹配顶点组时的最小相似度(0-1)",
         default=0.94,
         min=0.9,

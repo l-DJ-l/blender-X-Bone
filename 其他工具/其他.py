@@ -1,8 +1,9 @@
 # type: ignore
 import bpy
-import random
 from bpy.props import IntProperty
-from bpy.types import Operator, Panel
+import mathutils
+from mathutils import Vector
+import math
 
 class ObjType(bpy.types.Operator):
     def is_mesh(scene, obj):
@@ -17,12 +18,18 @@ class P_DEMO(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XBone'
+
+    @classmethod
+    def poll(cls, context):
+        # 只有当主面板激活了此子面板时才显示
+        return context.scene.active_xbone_subpanel == 'OtherTools'
     
     def draw(self, context):
         layout = self.layout
         col = layout.column(align=True)
         col.operator(MiniPlaneOperator.bl_idname, icon="MESH_CUBE")
         col.operator(RenameToComponents.bl_idname, icon="OUTLINER_OB_EMPTY")
+        col.operator(TANGENTSPACE_OCTAHEDRAL_UV_OT_operator.bl_idname, icon='UV')
 
         box = layout.box()
         col = box.column(align=True)
@@ -41,6 +48,7 @@ class P_DEMO(bpy.types.Panel):
                 col.label(text="错误: 物体没有骨架修改器", icon='ERROR')
         col.operator(ApplyAsShapekey.bl_idname, icon="SHAPEKEY_DATA")
 
+        
 
 
 
@@ -226,7 +234,7 @@ class ApplyAsShapekey(bpy.types.Operator):
         
         return {'FINISHED'}
     
-class NODE_OT_add_packed_image(Operator):
+class NODE_OT_add_packed_image(bpy.types.Operator):
     """创建已打包图像"""
     bl_idname = "xbone.add_packed_image"
     bl_label = "创建已打包图像"
@@ -304,7 +312,7 @@ class NODE_OT_add_packed_image(Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-class NODE_PT_add_packed_image(Panel):
+class NODE_PT_add_packed_image(bpy.types.Panel):
     """在节点编辑器侧边栏中添加面板"""
     bl_label = "图像"
     bl_space_type = 'NODE_EDITOR'
@@ -316,7 +324,7 @@ class NODE_PT_add_packed_image(Panel):
         layout.operator(NODE_OT_add_packed_image.bl_idname)
 
 
-class NODE_OT_add_material(Operator):
+class NODE_OT_add_material(bpy.types.Operator):
     bl_idname = "xbone.add_material"
     bl_label = "新建3贴图材质"
     bl_options = {'REGISTER', 'UNDO'}
@@ -441,7 +449,7 @@ class NODE_OT_add_material(Operator):
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
-class NODE_PT_add_material(Panel):
+class NODE_PT_add_material(bpy.types.Panel):
     """在材质属性中创建面板"""
     bl_label = "材质工具"
     bl_idname = "NODE_PT_add_material"
@@ -457,6 +465,188 @@ class NODE_PT_add_material(Panel):
             row = layout.row()
             row.operator(NODE_OT_add_material.bl_idname)
 
+def unit_vector_to_octahedron(n):
+    """
+    Converts a unit vector to octahedron coordinates.
+    n is a mathutils.Vector
+    """
+    # 确保输入是单位向量
+    if n.length_squared > 1e-10:
+        n.normalize()
+    else:
+        return Vector((0.0, 0.0))
+    
+    # 计算L1范数
+    l1_norm = abs(n.x) + abs(n.y) + abs(n.z)
+    if l1_norm < 1e-10:
+        return Vector((0.0, 0.0))
+    
+    # 投影到八面体平面
+    x = n.x / l1_norm
+    y = n.y / l1_norm
+    
+    # 负半球映射（仅在z<0时应用）
+    if n.z < 0:
+        # 使用精确的符号函数
+        sign_x = math.copysign(1.0, x)
+        sign_y = math.copysign(1.0, y)
+        
+        # 原始映射公式（保留在z=0处的良好行为）
+        new_x = (1.0 - abs(y)) * sign_x
+        new_y = (1.0 - abs(x)) * sign_y
+        
+        # 直接应用新坐标（移除过渡插值）
+        x = new_x
+        y = new_y
+    
+    return Vector((x, y))
+
+def calc_smooth_normals(mesh):
+    """计算平滑法线（角度加权平均）"""
+    vertex_normals = {}
+    
+    # 使用顶点索引作为键（避免浮点精度问题）
+    for i, vert in enumerate(mesh.vertices):
+        vertex_normals[i] = Vector((0, 0, 0))
+    
+    # 计算每个面的法线并加权累加到顶点
+    for poly in mesh.polygons:
+        verts = [mesh.vertices[i] for i in poly.vertices]
+        face_normal = poly.normal
+        
+        for i, vert in enumerate(verts):
+            # 获取相邻边向量
+            v1 = verts[(i+1) % len(verts)].co - vert.co
+            v2 = verts[(i-1) % len(verts)].co - vert.co
+            
+            # 计算角度权重
+            v1_len = v1.length
+            v2_len = v2.length
+            if v1_len > 1e-6 and v2_len > 1e-6:
+                v1.normalize()
+                v2.normalize()
+                weight = math.acos(max(-1.0, min(1.0, v1.dot(v2))))
+            else:
+                weight = 0.0
+            
+            # 累加加权法线
+            vertex_normals[vert.index] += face_normal * weight
+    
+    # 归一化法线
+    for idx in vertex_normals:
+        if vertex_normals[idx].length > 1e-6:
+            vertex_normals[idx].normalize()
+    
+    return vertex_normals
+
+class TANGENTSPACE_OCTAHEDRAL_UV_OT_operator(bpy.types.Operator):
+    """生成切线空间的八面体UV映射"""
+    bl_idname = "xbone.octahedral_uv"
+    bl_label = "平滑法线-八面体UV"
+    bl_description = ("对所有选中物体\n"
+    "平滑法线在切线空间的坐标，投射八面体展开平面\n"
+    "存储在TEXCOORD1")
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    
+    @classmethod
+    def poll(cls, context):
+        """检查是否可以选择网格物体"""
+        return context.selected_objects is not None and len(context.selected_objects) > 0
+    
+    def execute(self, context):
+        """执行操作"""
+        selected_objects = context.selected_objects
+        processed_count = 0
+        
+        for obj in selected_objects:
+            if self.process_object(obj):
+                processed_count += 1
+        
+        # 更新显示
+        context.view_layer.update()
+        
+        if processed_count > 0:
+            self.report({'INFO'}, f"切线空间八面体UV映射完成！共处理 {processed_count} 个网格物体")
+            return {'FINISHED'}
+        else:
+            self.report({'WARNING'}, "没有处理任何网格物体，请确保选中了网格物体")
+            return {'CANCELLED'}
+    
+    def process_object(self, obj):
+        """处理单个网格物体"""
+        if obj.type != 'MESH':
+            return False
+            
+        mesh = obj.data
+        
+        # 确保在对象模式（数据一致）
+        if bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+        # 操作前将活动UV设置为第一个（索引0）
+        if len(mesh.uv_layers) > 0:
+            mesh.uv_layers.active_index = 0
+        
+        # 计算平滑法线
+        smooth_normals = calc_smooth_normals(mesh)
+        
+        # 确保网格有UV层（计算切线需要）
+        if len(mesh.uv_layers) == 0:
+            mesh.uv_layers.new(name="UVMap")
+        
+        # 计算切线空间（TBN矩阵）
+        mesh.calc_tangents()
+        
+        # 创建/获取UV层
+        uv_layer_name = "TEXCOORD1.xy"
+        if uv_layer_name in mesh.uv_layers:
+            uv_layer = mesh.uv_layers[uv_layer_name]
+        else:
+            uv_layer = mesh.uv_layers.new(name=uv_layer_name)
+        
+        # 处理每个面的每个顶点
+        for poly in mesh.polygons:
+            for loop_idx in range(poly.loop_start, poly.loop_start + poly.loop_total):
+                loop = mesh.loops[loop_idx]
+                vertex_idx = loop.vertex_index
+                
+                # 获取平滑法线
+                normal = smooth_normals[vertex_idx]
+
+                # 构建TBN矩阵（切线空间到模型空间的变换）
+                tbn_matrix = mathutils.Matrix((
+                    loop.tangent,
+                    loop.bitangent,
+                    loop.normal
+                )).transposed() # 转置以从行向量变为列向量
+                
+                # 检查矩阵是否可逆
+                try:
+                    # 尝试计算逆矩阵
+                    tbn_inverse = tbn_matrix.inverted()
+                    
+                    # 将法线从模型空间转换到切线空间
+                    tangent_normal = tbn_inverse @ normal
+                    tangent_normal.normalize()
+                except ValueError:
+                    # 矩阵不可逆时的回退方案
+                    print(f"警告: 顶点 {vertex_idx} 的TBN矩阵不可逆，使用默认法线")
+                    
+                    tangent_normal = Vector((0, 0, 1))  # 默认使用Z轴作为法线
+                
+                # 八面体投影
+                oct_coords = unit_vector_to_octahedron(tangent_normal)
+                
+                # 设置UV
+                u = oct_coords.x
+                v = oct_coords.y + 1.0
+                uv_layer.data[loop_idx].uv = (u, v)
+        
+        # 释放切线数据
+        mesh.free_tangents()
+        
+        return True
 
 
 def register():
@@ -475,6 +665,7 @@ def register():
 
     bpy.utils.register_class(NODE_OT_add_material)
     bpy.utils.register_class(NODE_PT_add_material)
+    bpy.utils.register_class(TANGENTSPACE_OCTAHEDRAL_UV_OT_operator)
 
 
 def unregister():
@@ -489,5 +680,6 @@ def unregister():
 
     bpy.utils.unregister_class(NODE_OT_add_material)
     bpy.utils.unregister_class(NODE_PT_add_material)
+    bpy.utils.unregister_class(TANGENTSPACE_OCTAHEDRAL_UV_OT_operator)
 
 

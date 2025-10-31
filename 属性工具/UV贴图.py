@@ -2,17 +2,15 @@
 import bpy
 
 class DATA_PT_uv_map_tools(bpy.types.Panel):
-    bl_label = "UV贴图工具"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "data"
-    bl_parent_id = "DATA_PT_uv_texture"  # 设置为UV贴图面板的ID
-    bl_options = {'HIDE_HEADER'}  # 隐藏标题栏
+    bl_label = "UV贴图"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'XBone'
 
     @classmethod
     def poll(cls, context):
-        return (context.object is not None and 
-                context.object.type in {'MESH'})
+        # 只有当主面板激活了此子面板时才显示
+        return context.scene.active_xbone_subpanel == 'AttributeTools'
 
     def draw(self, context):
         layout = self.layout

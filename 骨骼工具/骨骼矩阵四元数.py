@@ -158,8 +158,13 @@ class P_BonePoseMatrix(bpy.types.Panel):
     bl_idname = "X_PT_BonePoseMatrix"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Item' #出现在item面板
+    bl_category = 'XBone' #出现在item面板
     bl_context = "posemode" #只在姿态模式出现
+
+    @classmethod
+    def poll(cls, context):
+        # 只有当主面板激活了此子面板时才显示
+        return context.scene.active_xbone_subpanel == 'BoneTools'
 
     def draw(self, context):
         layout = self.layout
@@ -238,7 +243,7 @@ class P_BoneEditMatrix(bpy.types.Panel):
     bl_idname = "X_PT_BoneEditMatrix"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Item'
+    bl_category = 'XBone'
     bl_context = "armature_edit" #只在骨架编辑模式可见
 
     def draw(self, context):

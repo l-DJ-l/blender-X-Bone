@@ -427,7 +427,11 @@ class P_BonePose(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XBone'  # 这里设置自定义标签的名称
-    #bl_options = {'DEFAULT_'} #默认折叠
+
+    @classmethod
+    def poll(cls, context):
+        # 只有当主面板激活了此子面板时才显示
+        return context.scene.active_xbone_subpanel == 'BoneTools'
 
     def draw(self, context):
         layout = self.layout

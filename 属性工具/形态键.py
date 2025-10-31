@@ -5,18 +5,15 @@ import time
 from typing import Dict, Tuple, Set, List, Optional
 
 class DATA_PT_shape_key_tools(bpy.types.Panel):
-    bl_label = "形态键扩展操作"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "data"
-    bl_parent_id = "DATA_PT_shape_keys"  # 设置为形态键面板的ID
-    bl_options = {'HIDE_HEADER'}  # 隐藏标题栏
+    bl_label = "形态键"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'XBone'
 
     @classmethod
     def poll(cls, context):
-        return (context.object is not None and 
-                context.object.type == 'MESH' and 
-                context.object.data.shape_keys)
+        # 只有当主面板激活了此子面板时才显示
+        return context.scene.active_xbone_subpanel == 'AttributeTools'
 
     def draw(self, context):
         layout = self.layout
@@ -24,7 +21,7 @@ class DATA_PT_shape_key_tools(bpy.types.Panel):
         row = col.row(align=True)
         row.prop(context.scene, "shape_key_similarity_threshold")
         row.operator(O_ShapeKeysMatchRename.bl_idname, text=O_ShapeKeysMatchRename.bl_label, icon="SORTBYEXT")
-        row.separator()
+        row = col.row(align=True)
         row.operator(O_ShapeKeysSortMatch.bl_idname, text=O_ShapeKeysSortMatch.bl_label, icon="SORTSIZE")
         row.operator(O_ShapeKeysRenameByOrder.bl_idname, text=O_ShapeKeysRenameByOrder.bl_label, icon="SORTALPHA")
 
@@ -205,8 +202,8 @@ class O_ShapeKeysMatchRename(bpy.types.Operator):
 
 class O_ShapeKeysSortMatch(bpy.types.Operator):
     bl_idname = "xbone.shape_keys_sort_match"
-    bl_label = "名称排序"
-    bl_description = ("严格按照选择物体的形态键顺序重新排列活动物体的形态键\n"
+    bl_label = "按名称排序"
+    bl_description = ("严格按照选择物体的形态键名称顺序重新排列活动物体的形态键\n"
                     "操作逻辑:\n"
                     "1. 按选择物体的形态键顺序依次处理\n"
                     "2. 缺少的形态键会新建空键\n"
