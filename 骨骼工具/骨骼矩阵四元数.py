@@ -159,7 +159,7 @@ class P_BonePoseMatrix(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XBone' #出现在item面板
-    bl_context = "posemode" #只在姿态模式出现
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
@@ -244,7 +244,7 @@ class P_BoneEditMatrix(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XBone'
-    bl_context = "armature_edit" #只在骨架编辑模式可见
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
