@@ -12,7 +12,7 @@ bl_info = {
 
 ########################## Divider ##########################
 from . import panel
-from .骨骼工具 import 骨骼与顶点组, 骨骼姿态操作, 骨骼矩阵四元数, 骨骼编辑操作, MOD骨架替换
+from .骨骼工具 import 骨骼与顶点组, 骨骼姿态操作, 骨骼编辑操作, MOD骨架替换
 from .属性工具 import 顶点组, 形态键, UV贴图, 顶点色
 from .其他工具 import 其他
 
@@ -24,7 +24,6 @@ def register():
     骨骼与顶点组.register()
     骨骼姿态操作.register()
     骨骼编辑操作.register()
-    骨骼矩阵四元数.register()
     MOD骨架替换.register()
     顶点组.register()
     形态键.register()
@@ -38,7 +37,6 @@ def unregister():
     骨骼与顶点组.unregister()
     骨骼姿态操作.unregister()
     骨骼编辑操作.unregister()
-    骨骼矩阵四元数.unregister()
     MOD骨架替换.unregister()
     顶点组.unregister()
     形态键.unregister()

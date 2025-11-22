@@ -414,7 +414,7 @@ class P_VertexGroups(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         # 只有当主面板激活了此子面板时才显示
-        return context.scene.active_xbone_subpanel == 'BoneTools'
+        return getattr(context.scene, 'active_xbone_subpanel', '') == 'BoneTools'
 
     def draw(self, context):
         layout = self.layout
