@@ -665,7 +665,7 @@ class O_BonePoseRotateToActive(bpy.types.Operator):
     """
     bl_idname = "xbone.pose_rotate_to_active"
     bl_label = "父级转向活动骨骼"
-    bl_description = "旋转选中骨骼(A)的父级(P)，使A指向活动骨骼(B)的位置"
+    bl_description = "使用阻尼追踪约束，旋转选中骨骼(A)的父级(P)，使A指向活动骨骼(B)的位置"
     bl_options = {'REGISTER', 'UNDO'}
     
     @classmethod
@@ -698,6 +698,9 @@ class O_BonePoseRotateToActive(bpy.types.Operator):
             self.report({'ERROR'}, "选中骨骼没有父级骨骼")
             return {'CANCELLED'}
         
+        # 保存当前活动骨架
+        original_active = context.view_layer.objects.active
+
         # 必须设置pose_bone_P骨架骨骼为活动对象，不然无法应用约束
         bpy.ops.pose.select_all(action='DESELECT')
         context.view_layer.objects.active = pose_bone_P.id_data
@@ -719,7 +722,13 @@ class O_BonePoseRotateToActive(bpy.types.Operator):
             # 不应用约束，只添加约束
             action_text = "已添加"
         
-        # 更新场景
+        # 恢复原始选择状态
+        bpy.ops.pose.select_all(action='DESELECT')
+        pose_bone_A.bone.select = True
+        context.view_layer.objects.active = pose_bone_B.id_data
+        pose_bone_B.id_data.data.bones.active = pose_bone_B.bone
+        # 恢复原始活动骨架
+        context.view_layer.objects.active = original_active
         context.view_layer.update()
         self.report({'INFO'}, f"父级骨骼 '{pose_bone_P.name}' {action_text}阻尼追踪约束指向 '{pose_bone_B.name}'")
         return {'FINISHED'}
@@ -845,7 +854,7 @@ class O_BonePoseXYZRotateToActive(bpy.types.Operator):
         pose_bone_B.id_data.data.bones.active = pose_bone_B.bone
         # 恢复原始活动骨架
         context.view_layer.objects.active = original_active
-        
+        context.view_layer.update()
         self.report({'INFO'}, f"父级骨骼 '{pose_bone_P.name}' 绕世界{axis_name}轴旋转 {math.degrees(angle):.2f}°")
         return {'FINISHED'}
 
